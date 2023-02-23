@@ -4,6 +4,10 @@ AllCops:
   Exclude:
     - ?.rb
 
+require:
+  - rubocop-rake
+  - rubocop-rspec
+
 Layout/LineLength:
   Max: 120
 
