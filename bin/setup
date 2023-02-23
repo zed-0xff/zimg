@@ -5,14 +5,17 @@ set -vx
 
 bundle install
 
-mkdir -p samples/png_suite
-cd samples/png_suite
+mkdir -p samples/png/png_suite
+pushd samples/png/png_suite
 wget -qc http://www.schaik.com/pngsuite/PngSuite-2017jul19.tgz && tar xf PngSuite-2017jul19.tgz
+popd
 
-cd ..
+mkdir -p samples/jpeg
+pushd samples/jpeg
 if [ -d jpeg-js ]; then
         cd jpeg-js
         git pull
 else
         git clone git@github.com:jpeg-js/jpeg-js.git
 fi
+popd
