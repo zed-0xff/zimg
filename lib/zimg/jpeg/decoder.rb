@@ -1,14 +1,15 @@
 # -*- coding:binary; frozen_string_literal: true -*-
+
 # based on https://github.com/jpeg-js/jpeg-js
 
 module ZIMG
   module JPEG
     class Frame
       attr_accessor :extended, :progressive, :precision, :scanlines, :samples_per_line, :components
-      attr_accessor :max_h, :max_v, :mcus_per_line, :mcus_per_column
+      attr_reader :max_h, :max_v, :mcus_per_line, :mcus_per_column
 
       # sof is a SOF012 chunk
-      def initialize sof, qtables
+      def initialize(sof, qtables)
         @extended         = sof.extended?
         @progressive      = sof.progressive?
         @precision        = sof.bpp
@@ -30,34 +31,35 @@ module ZIMG
     end # class Frame
 
     class Component
-      attr_accessor :id, :h, :v, :qid
-      attr_accessor :blocks_per_line, :blocks_per_column, :blocks, :qtable
-      attr_accessor :huffman_table_ac, :huffman_table_dc
-      attr_accessor :pred
-      attr_accessor :scale_x, :scale_y
+      # attributes set from JPEG data
+      attr_reader :id, :h, :v, :qid
+      # self-calculated values
+      attr_reader :blocks_per_line, :blocks_per_column, :blocks, :qtable
+      # externally-calculated values
+      attr_accessor :huffman_table_ac, :huffman_table_dc, :pred, :scale_x, :scale_y
 
-      def initialize id, hv, qid
+      def initialize(id, hv, qid)
         @id = id
-        @qid = qid    # quantization_idx
+        @qid = qid # quantization_idx
         @h = hv >> 4
         @v = hv & 0x0f
-        raise 'Invalid sampling factor, expected values above 0' if @h <= 0 || @v <= 0
+        raise "Invalid sampling factor, expected values above 0" if @h <= 0 || @v <= 0
       end
 
       def inspect
-        "<%d %d %d %d>" % [id, h, v, qid]
+        format("<%d %d %d %d>", id, h, v, qid)
       end
 
-      def prepare frame, qtables
+      def prepare(frame, qtables)
         @blocks_per_line          = ((frame.samples_per_line / 8.0).ceil * 1.0 * h / frame.max_h).ceil
         @blocks_per_column        = ((frame.scanlines / 8.0).ceil * 1.0 * v / frame.max_v).ceil
         blocks_per_line_for_mcu   = frame.mcus_per_line * h
         blocks_per_column_for_mcu = frame.mcus_per_column * v
 
         @blocks = []
-        blocks_per_column_for_mcu.times do |i|
+        blocks_per_column_for_mcu.times do
           row = []
-          blocks_per_line_for_mcu.times do |j|
+          blocks_per_line_for_mcu.times do
             row.push([0] * 64)
           end
           @blocks.push(row)
@@ -75,13 +77,13 @@ module ZIMG
 
       def _decode
         samples_per_line = blocks_per_line << 3
-        ri = [0]*64 # Int32
-        rb = "\x00"*64 # Uint8
+        ri = [0] * 64 # Int32
+        rb = "\x00" * 64 # Uint8
         lines = []
         blocks_per_column.times do |block_row|
           scanline = block_row << 3
           8.times do
-            lines.push("\x00"*samples_per_line)
+            lines.push("\x00" * samples_per_line)
           end
           blocks_per_line.times do |block_col|
             quantize_and_inverse(blocks[block_row][block_col], rb, ri)
@@ -101,7 +103,7 @@ module ZIMG
       end
 
       DCT_COS_1    = 4017  # cos(pi/16)
-      DCT_SIN_1    =  799  # sin(pi/16)
+      DCT_SIN_1    = 799   # sin(pi/16)
       DCT_COS_3    = 3406  # cos(3*pi/16)
       DCT_SIN_3    = 2276  # sin(3*pi/16)
       DCT_COS_6    = 1567  # cos(6*pi/16)
@@ -127,9 +129,9 @@ module ZIMG
           row = 8 * i
 
           # check for all-zero AC coefficients
-          if (p[1 + row] == 0 && p[2 + row] == 0 && p[3 + row] == 0 &&
-              p[4 + row] == 0 && p[5 + row] == 0 && p[6 + row] == 0 &&
-              p[7 + row] == 0)
+          if p[1 + row] == 0 && p[2 + row] == 0 && p[3 + row] == 0 &&
+             p[4 + row] == 0 && p[5 + row] == 0 && p[6 + row] == 0 &&
+             p[7 + row] == 0
             t = (DCT_SQRT_2 * p[0 + row] + 512) >> 10
             p[0 + row] = t
             p[1 + row] = t
@@ -153,7 +155,7 @@ module ZIMG
           v6 = p[5 + row] << 4
 
           # stage 3
-          t = (v0 - v1+ 1) >> 1
+          t = (v0 - v1 + 1) >> 1
           v0 = (v0 + v1 + 1) >> 1
           v1 = t
           t = (v2 * DCT_SIN_6 + v3 * DCT_COS_6 + 128) >> 8
@@ -196,30 +198,30 @@ module ZIMG
           col = i
 
           # check for all-zero AC coefficients
-          if (p[1*8 + col] == 0 && p[2*8 + col] == 0 && p[3*8 + col] == 0 &&
-              p[4*8 + col] == 0 && p[5*8 + col] == 0 && p[6*8 + col] == 0 &&
-              p[7*8 + col] == 0)
-            t = (DCT_SQRT_2 * data_in[i+0] + 8192) >> 14
-            p[0*8 + col] = t
-            p[1*8 + col] = t
-            p[2*8 + col] = t
-            p[3*8 + col] = t
-            p[4*8 + col] = t
-            p[5*8 + col] = t
-            p[6*8 + col] = t
-            p[7*8 + col] = t
+          if p[1 * 8 + col] == 0 && p[2 * 8 + col] == 0 && p[3 * 8 + col] == 0 &&
+             p[4 * 8 + col] == 0 && p[5 * 8 + col] == 0 && p[6 * 8 + col] == 0 &&
+             p[7 * 8 + col] == 0
+            t = (DCT_SQRT_2 * data_in[i + 0] + 8192) >> 14
+            p[0 * 8 + col] = t
+            p[1 * 8 + col] = t
+            p[2 * 8 + col] = t
+            p[3 * 8 + col] = t
+            p[4 * 8 + col] = t
+            p[5 * 8 + col] = t
+            p[6 * 8 + col] = t
+            p[7 * 8 + col] = t
             next
           end
 
           # stage 4
-          v0 = (DCT_SQRT_2 * p[0*8 + col] + 2048) >> 12
-          v1 = (DCT_SQRT_2 * p[4*8 + col] + 2048) >> 12
-          v2 = p[2*8 + col]
-          v3 = p[6*8 + col]
-          v4 = (DCT_SQRT_2D2 * (p[1*8 + col] - p[7*8 + col]) + 2048) >> 12
-          v7 = (DCT_SQRT_2D2 * (p[1*8 + col] + p[7*8 + col]) + 2048) >> 12
-          v5 = p[3*8 + col]
-          v6 = p[5*8 + col]
+          v0 = (DCT_SQRT_2 * p[0 * 8 + col] + 2048) >> 12
+          v1 = (DCT_SQRT_2 * p[4 * 8 + col] + 2048) >> 12
+          v2 = p[2 * 8 + col]
+          v3 = p[6 * 8 + col]
+          v4 = (DCT_SQRT_2D2 * (p[1 * 8 + col] - p[7 * 8 + col]) + 2048) >> 12
+          v7 = (DCT_SQRT_2D2 * (p[1 * 8 + col] + p[7 * 8 + col]) + 2048) >> 12
+          v5 = p[3 * 8 + col]
+          v6 = p[5 * 8 + col]
 
           # stage 3
           t = (v0 - v1 + 1) >> 1
@@ -250,26 +252,31 @@ module ZIMG
           v6 = t
 
           # stage 1
-          p[0*8 + col] = v0 + v7
-          p[7*8 + col] = v0 - v7
-          p[1*8 + col] = v1 + v6
-          p[6*8 + col] = v1 - v6
-          p[2*8 + col] = v2 + v5
-          p[5*8 + col] = v2 - v5
-          p[3*8 + col] = v3 + v4
-          p[4*8 + col] = v3 - v4
+          p[0 * 8 + col] = v0 + v7
+          p[7 * 8 + col] = v0 - v7
+          p[1 * 8 + col] = v1 + v6
+          p[6 * 8 + col] = v1 - v6
+          p[2 * 8 + col] = v2 + v5
+          p[5 * 8 + col] = v2 - v5
+          p[3 * 8 + col] = v3 + v4
+          p[4 * 8 + col] = v3 - v4
         end
 
         # convert to 8-bit integers
         64.times do |i|
           sample = 128 + ((p[i] + 8) >> 4)
-          data_out[i] = (sample < 0 ? 0 : sample > 0xFF ? 0xFF : sample).chr
+          data_out[i] = (if sample < 0
+                           0
+                         else
+                           (sample > 0xFF ? 0xFF : sample)
+                         end).chr
         end
         data_out
       end
     end
 
     class Decoder
+      # rubocop:disable Metrics/ParameterLists
       def initialize(data, frame, components, reset_interval, spectral_start, spectral_end, successive_prev, successive)
         @components       = components
         @data             = data
@@ -295,41 +302,43 @@ module ZIMG
         @offset = 0
         @bit_io = _create_enumerator(@data)
       end
+      # rubocop:enable Metrics/ParameterLists
 
       def _create_enumerator(data, offset = 0)
-        #printf "[d] offset=%6d  _create_enumerator\n", offset
+        # printf "[d] offset=%6d  _create_enumerator\n", offset
         Enumerator.new do |e|
           sio = StringIO.new(data)
           sio.seek(offset)
 
-          while (b = sio.getbyte())
+          while (b = sio.getbyte)
             @offset += 1
             if b == 0xff
               # unstuff 0
-              b1 = sio.getbyte()
+              b1 = sio.getbyte
               raise "unexpected byte 0x#{b1.to_s(16)} after 0xff" if b1 != 0
+
               @offset += 1
             end
-            #printf "[d] offset=%6d byte=%3d\n", @offset-1, b
-            e << (b>>7)
-            e << ((b>>6) & 1)
-            e << ((b>>5) & 1)
-            e << ((b>>4) & 1)
-            e << ((b>>3) & 1)
-            e << ((b>>2) & 1)
-            e << ((b>>1) & 1)
+            # printf "[d] offset=%6d byte=%3d\n", @offset-1, b
+            e << (b >> 7)
+            e << ((b >> 6) & 1)
+            e << ((b >> 5) & 1)
+            e << ((b >> 4) & 1)
+            e << ((b >> 3) & 1)
+            e << ((b >> 2) & 1)
+            e << ((b >> 1) & 1)
             e << (b & 1)
-            b0 = b
           end
           e << nil # EOF
         end
       end
 
-      def receive(length) 
+      def receive(length)
         r = 0
         length.times do
           bit = @bit_io.next
           return unless bit
+
           r = (r << 1) | bit
         end
         r
@@ -338,6 +347,7 @@ module ZIMG
       def receive_and_extend(length)
         n = receive(length)
         return n if n >= (1 << (length - 1))
+
         n + (-1 << length) + 1
       end
 
@@ -363,74 +373,73 @@ module ZIMG
           end
         @reset_interval ||= mcu_expected
 
-				while mcu < mcu_expected
+        while mcu < mcu_expected
           @bit_io ||= _create_enumerator(@data, @offset)
 
-					# reset interval stuff
-          @components.each{ |c| c.pred = 0 }
-					@eobrun = 0
+          # reset interval stuff
+          @components.each { |c| c.pred = 0 }
+          @eobrun = 0
 
-					if @components.size == 1
-						component = @components[0]
+          if @components.size == 1
+            component = @components[0]
             @reset_interval.times do
-							decode_block(component, decode_fn, mcu)
-							mcu += 1
+              decode_block(component, decode_fn, mcu)
+              mcu += 1
             end
-					else
-            #printf "[d] offset=%6d here\n", @offset
+          else
+            # printf "[d] offset=%6d here\n", @offset
             @reset_interval.times do
               @components.each do |c|
                 c.v.times do |j|
                   c.h.times do |k|
-										decode_mcu(c, decode_fn, mcu, j, k)
+                    decode_mcu(c, decode_fn, mcu, j, k)
                   end
                 end
               end
-							mcu += 1
+              mcu += 1
 
-							# If we've reached our expected MCU's, stop decoding
-							break if mcu == mcu_expected
+              # If we've reached our expected MCU's, stop decoding
+              break if mcu == mcu_expected
             end
-            #printf "[d] offset=%6d here2\n", @offset
+            # printf "[d] offset=%6d here2\n", @offset
           end
 
-          #printf "[d] offset=%6d here_end\n", @offset
-					if mcu == mcu_expected
-						# Skip trailing bytes at the end of the scan - until we reach the next marker
-            if @offset < @data.size
-              printf "[?] %d extra bytes at end of scan\n".yellow, @data.size - @offset
-            end
-						while @offset < @data.size
-							break if @data[@offset] == "\xFF" && @data[@offset + 1] != "\x00"
-							@offset += 1
+          # printf "[d] offset=%6d here_end\n", @offset
+          if mcu == mcu_expected
+            # Skip trailing bytes at the end of the scan - until we reach the next marker
+            printf "[?] %d extra bytes at end of scan\n".yellow, @data.size - @offset if @offset < @data.size
+            while @offset < @data.size
+              break if @data[@offset] == "\xFF" && @data[@offset + 1] != "\x00"
+
+              @offset += 1
               @bit_io = nil
             end
           end
 
-					# find marker
-					marker = @data[@offset,2]
+          # find marker
+          marker = @data[@offset, 2]
           break if marker.nil? || marker.empty? # valid EOF
           raise "got #{marker.inspect} instead of marker" if marker[0] != "\xFF"
 
-          if (0xd0..0xd7).include?(marker[1].ord) # RSTx
-						@offset += 2
-            @bit_io = nil
-					else
-						break
-          end
-				end # while
+          break unless (0xd0..0xd7).include?(marker[1].ord) # RSTx
 
-				@offset
+          @offset += 2
+          @bit_io = nil
+
+        end # while
+
+        @offset
       end
 
       def decode_mcu(component, decode_fn, mcu, row, col)
-        #puts "[d] decode_mcu(#{mcu}, #{row}, #{col})"
+        # puts "[d] decode_mcu(#{mcu}, #{row}, #{col})"
         mcu_row = mcu / @mcus_per_line
         mcu_col = mcu % @mcus_per_line
         block_row = mcu_row * component.v + row
         block_col = mcu_col * component.h + col
         # skip missing block
         return unless component.blocks[block_row]
+
         decode_fn.call(component, component.blocks[block_row][block_col])
       end
 
@@ -439,13 +448,14 @@ module ZIMG
         block_col = mcu % component.blocks_per_line
         # skip missing block
         return unless component.blocks[block_row]
+
         decode_fn.call(component, component.blocks[block_row][block_col])
       end
 
       def decode_baseline(component, dst)
         t = component.huffman_table_dc.decode(@bit_io)
         diff = t == 0 ? 0 : receive_and_extend(t)
-        #printf "[d] offset=%6d                       t=%d diff=%d\n", @offset, t, diff
+        # printf "[d] offset=%6d                       t=%d diff=%d\n", @offset, t, diff
         dst[0] = (component.pred += diff)
         k = 1
         while k < 64
@@ -454,6 +464,7 @@ module ZIMG
           r = rs >> 4
           if s == 0
             break if r < 15
+
             k += 16
             next
           end
@@ -462,7 +473,7 @@ module ZIMG
           dst[z] = receive_and_extend(s)
           k += 1
         end
-        #printf "[d] offset=%6d decode_baseline end\n", @offset
+        # printf "[d] offset=%6d decode_baseline end\n", @offset
       end
 
       def decode_ac0(component, dst)
@@ -513,6 +524,7 @@ module ZIMG
               end
             else
               raise "invalid ACn encoding" if s != 1
+
               @successive_ac_next_value = receive_and_extend(s)
               @successive_ac_state = r == 0 ? 3 : 2
             end
@@ -534,18 +546,16 @@ module ZIMG
               @successive_ac_state = 0
             end
           when 4 # eob
-            if dst[z] != 0
-              dst[z] += (@bit_io.next << @successive) * direction
-            end
+            dst[z] += (@bit_io.next << @successive) * direction if dst[z] != 0
           else
             raise "invalid AC state #{@successive_ac_state}"
           end # case
           k += 1
         end # while
-        if @successive_ac_state == 4
-          @eobrun -= 1
-          @successive_ac_state = 0 if @eobrun == 0
-        end
+        return unless @successive_ac_state == 4
+
+        @eobrun -= 1
+        @successive_ac_state = 0 if @eobrun == 0
       end
 
       def decode_dc0(component, dst)
@@ -554,10 +564,9 @@ module ZIMG
         dst[0] = (component.pred += diff)
       end
 
-      def decode_dc1(component, dst)
+      def decode_dc1(_component, dst)
         dst[0] |= (@bit_io.next << @successive)
       end
-
     end
   end
 end
