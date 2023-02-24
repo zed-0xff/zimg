@@ -18,7 +18,11 @@ each_sample("jpeg/**/*.{cmyk,rgb,rgba}") do |dst_fname|
           src.to_rgba
         end
       expect(src.size).to eq(dst.size)
-      expect(src[0, 30]).to eq(dst[0, 30])
+      if src != dst
+        tmp_fname = "#{src_fname.sub(/.jpg$/, "")}.tmp"
+        File.binwrite(tmp_fname, src)
+        raise "#{tmp_fname} is not equal to #{dst_fname}"
+      end
     end
   end
 end
