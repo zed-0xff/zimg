@@ -58,6 +58,23 @@ module ZIMG
       warn "[?] #{@extradata.last.size} bytes of extra data after image end (IEND), offset = 0x#{offset.to_s(16)}".red
     end
 
+    def inspect
+      info =
+        %w[width height bpp chunks scanlines].map do |k|
+          next unless respond_to?(k)
+
+          v = case (v = send(k))
+              when Array
+                "[#{v.size} entries]"
+              when String
+                v.size > 40 ? "[#{v.bytesize} bytes]" : v.inspect
+              else v.inspect
+              end
+          "#{k}=#{v}"
+        end.compact.join(", ")
+      format("#<ZIMG::Image %s>", info)
+    end
+
     class << self
       # load image from file
       def load(fname, h = {})

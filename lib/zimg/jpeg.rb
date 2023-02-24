@@ -235,7 +235,7 @@ module ZIMG
       # quantization tables
       qtables = {}
       chunks.find_all { |c| c.is_a?(DQT) }.each { |c| qtables.merge!(c.tables) }
-      frame = Frame.new(@sof, qtables)
+      frame = @sof.lossless? ? Lossless::Frame.new(@sof) : Frame.new(@sof, qtables)
       reset_interval = nil
       @chunks.each do |chunk|
         case chunk
@@ -261,7 +261,8 @@ module ZIMG
             comp.huffman_table_ac = huffman_tables_ac[table_spec & 15]
             comp
           end
-          d = Decoder.new(sos.ecs.data, frame, components, reset_interval, sos.spectral_start, sos.spectral_end,
+          decoder_class = @sof.lossless? ? Lossless::Decoder : Decoder
+          d = decoder_class.new(sos.ecs.data, frame, components, reset_interval, sos.spectral_start, sos.spectral_end,
             sos.successive_approx >> 4, sos.successive_approx & 0x0f)
           d.decode_scan
         end
@@ -274,3 +275,4 @@ end
 require_relative "jpeg/chunks"
 require_relative "jpeg/decoder"
 require_relative "jpeg/huffman"
+require_relative "jpeg/lossless"

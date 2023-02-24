@@ -93,9 +93,10 @@ module ZIMG
         @id = marker[1].ord & 0xf
         @bpp, @height, @width, @ncomp = @data.unpack("CnnC")
         @components = []
+        component_class = lossless? ? Lossless::Component : Component
         @ncomp.times do |i|
           id, hv, qid = @data[6 + i * 3, 3].unpack("CCC")
-          @components << Component.new(id, hv, qid)
+          @components << component_class.new(id, hv, qid)
         end
       end
 
@@ -113,6 +114,10 @@ module ZIMG
 
       def progressive?
         coding_process == :progressive
+      end
+
+      def lossless?
+        coding_process == :lossless
       end
 
       def coding_process
@@ -147,7 +152,7 @@ module ZIMG
       def inspect *_params
         super.chop +
           attributes.join(" ") +
-          format("bpp=%d width=%d height=%d ncomp=%d >", bpp, width, height, ncomp) +
+          format(" bpp=%d width=%d height=%d ncomp=%d ", bpp, width, height, ncomp) +
           format("components=%s >", components.inspect)
       end
     end

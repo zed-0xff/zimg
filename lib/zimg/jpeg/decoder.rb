@@ -287,29 +287,58 @@ module ZIMG
       end
     end
 
-    class Decoder
-      # rubocop:disable Metrics/ParameterLists
-      def initialize(data, frame, components, reset_interval, spectral_start, spectral_end, successive_prev, successive)
-        @components       = components
-        @data             = data
-        @reset_interval   = reset_interval
-        @spectral_end     = spectral_end
-        @spectral_start   = spectral_start
-        @successive       = successive
-        @successive_prev  = successive_prev
-
-        @mcus_per_line    = frame.mcus_per_line
-        @mcus_per_column  = frame.mcus_per_column
-        @progressive      = frame.progressive
-
-        @successive_ac_state = 0
-        @successive_ac_next_value = nil
-        @eobrun = 0
-
-        @offset = 0
-        @bit_io = _create_enumerator(@data)
+    class BitEnumerator
+      def initialize(data, offset: 0)
+        @data = data
+        @offset = offset
       end
-      # rubocop:enable Metrics/ParameterLists
+
+      def next
+        @bio ||= _create_enumerator(@data, @offset)
+        @bio.next
+      end
+
+      def peek_byte(add = 0)
+        @data[@offset + add]
+      end
+
+      def peek_bytes(n)
+        @data[@offset, n]
+      end
+
+      def skip_bytes(n)
+        @offset += n
+        @bio = nil
+      end
+
+      def bytes_left
+        @data.size - @offset
+      end
+
+      def reset!
+        @bio = nil
+      end
+
+      def receive(length)
+        @bio ||= _create_enumerator(@data, @offset)
+        r = 0
+        length.times do
+          bit = @bio.next
+          return unless bit
+
+          r = (r << 1) | bit
+        end
+        r
+      end
+
+      def receive_extend(length)
+        n = receive(length)
+        return n if n >= (1 << (length - 1))
+
+        n + (-1 << length) + 1
+      end
+
+      private
 
       def _create_enumerator(data, offset = 0)
         # printf "[d] offset=%6d  _create_enumerator\n", offset
@@ -339,24 +368,30 @@ module ZIMG
           e << nil # EOF
         end
       end
+    end
 
-      def receive(length)
-        r = 0
-        length.times do
-          bit = @bit_io.next
-          return unless bit
+    class Decoder
+      # rubocop:disable Metrics/ParameterLists
+      def initialize(data, frame, components, reset_interval, spectral_start, spectral_end, successive_prev, successive)
+        @components       = components
+        @reset_interval   = reset_interval
+        @spectral_end     = spectral_end
+        @spectral_start   = spectral_start
+        @successive       = successive
+        @successive_prev  = successive_prev
 
-          r = (r << 1) | bit
-        end
-        r
+        @mcus_per_line    = frame.mcus_per_line
+        @mcus_per_column  = frame.mcus_per_column
+        @progressive      = frame.progressive
+
+        @successive_ac_state = 0
+        @successive_ac_next_value = nil
+        @eobrun = 0
+
+        @offset = 0
+        @bit_io = BitEnumerator.new(data)
       end
-
-      def receive_and_extend(length)
-        n = receive(length)
-        return n if n >= (1 << (length - 1))
-
-        n + (-1 << length) + 1
-      end
+      # rubocop:enable Metrics/ParameterLists
 
       def decode_scan
         decode_fn =
@@ -381,7 +416,7 @@ module ZIMG
         @reset_interval ||= mcu_expected
 
         while mcu < mcu_expected
-          @bit_io ||= _create_enumerator(@data, @offset)
+          @bit_io.reset!
 
           # reset interval stuff
           @components.each { |c| c.pred = 0 }
@@ -414,24 +449,22 @@ module ZIMG
           # printf "[d] offset=%6d here_end\n", @offset
           if mcu == mcu_expected
             # Skip trailing bytes at the end of the scan - until we reach the next marker
-            printf "[?] %d extra bytes at end of scan\n".yellow, @data.size - @offset if @offset < @data.size
-            while @offset < @data.size
-              break if @data[@offset] == "\xFF" && @data[@offset + 1] != "\x00"
+            printf "[?] %d extra bytes at end of scan\n".yellow, @bit_io.bytes_left if @bit_io.bytes_left > 0
+            while @bit_io.bytes_left > 0
+              break if @bit_io.peek_byte == "\xFF" && @bit_io.peek_byte(1) != "\x00"
 
-              @offset += 1
-              @bit_io = nil
+              @bit_io.skip_bytes(1)
             end
           end
 
           # find marker
-          marker = @data[@offset, 2]
+          marker = @bit_io.peek_bytes(2)
           break if marker.nil? || marker.empty? # valid EOF
           raise "got #{marker.inspect} instead of marker" if marker[0] != "\xFF"
 
           break unless (0xd0..0xd7).include?(marker[1].ord) # RSTx
 
-          @offset += 2
-          @bit_io = nil
+          @bit_io.skip_bytes(2)
 
         end # while
 
@@ -461,7 +494,7 @@ module ZIMG
 
       def decode_baseline(component, dst)
         t = component.huffman_table_dc.decode(@bit_io)
-        diff = t == 0 ? 0 : receive_and_extend(t)
+        diff = t == 0 ? 0 : @bit_io.receive_extend(t)
         # printf "[d] offset=%6d                       t=%d diff=%d\n", @offset, t, diff
         dst[0] = (component.pred += diff)
         k = 1
@@ -477,7 +510,7 @@ module ZIMG
           end
           k += r
           z = DCT_ZIGZAG[k]
-          dst[z] = receive_and_extend(s)
+          dst[z] = @bit_io.receive_extend(s)
           k += 1
         end
         # printf "[d] offset=%6d decode_baseline end\n", @offset
@@ -497,7 +530,7 @@ module ZIMG
           r = rs >> 4
           if s == 0
             if r < 15
-              @eobrun = receive(r) + (1 << r) - 1
+              @eobrun = @bit_io.receive(r) + (1 << r) - 1
               break
             end
             k += 16
@@ -505,7 +538,7 @@ module ZIMG
           end
           k += r
           z = DCT_ZIGZAG[k]
-          dst[z] = receive_and_extend(s) * (1 << @successive)
+          dst[z] = @bit_io.receive_extend(s) * (1 << @successive)
           k += 1
         end
       end
@@ -524,7 +557,7 @@ module ZIMG
             r = rs >> 4
             if s == 0
               if r < 15
-                @eobrun = receive(r) + (1 << r)
+                @eobrun = @bit_io.receive(r) + (1 << r)
                 @successive_ac_state = 4
               else
                 r = 16
@@ -533,7 +566,7 @@ module ZIMG
             else
               raise "invalid ACn encoding" if s != 1
 
-              @successive_ac_next_value = receive_and_extend(s)
+              @successive_ac_next_value = @bit_io.receive_extend(s)
               @successive_ac_state = r == 0 ? 3 : 2
             end
             next
@@ -572,13 +605,13 @@ module ZIMG
 
       def decode_dc0(component, dst)
         t = component.huffman_table_dc.decode(@bit_io)
-        diff = t == 0 ? 0 : (receive_and_extend(t) << @successive)
+        diff = t == 0 ? 0 : (@bit_io.receive_extend(t) << @successive)
         dst[0] = (component.pred += diff)
       end
 
       def decode_dc1(_component, dst)
         dst[0] |= (@bit_io.next << @successive)
       end
-    end
+    end # class Decoder
   end
 end
