@@ -10,6 +10,21 @@ module ZIMG
       Marshal.load(Marshal.dump(self))
     end
   end
+
+  @magics = {}
+
+  class << self
+    attr_reader :magics
+
+    def supported_formats
+      magics.values.uniq
+    end
+
+    def register_format!(fmt)
+      m = const_get(fmt.to_s.upcase)
+      @magics[m.const_get("MAGIC")] = fmt
+    end
+  end
 end
 
 require_relative "zimg/utils/string_ext"

@@ -35,19 +35,21 @@ module ZIMG
     def _from_io(io)
       io.binmode
 
-      hdr = io.read(BMP::MAGIC.size)
-      case hdr
-      when BMP::MAGIC
-        _read_bmp io
-      when JPEG::MAGIC
-        extend(JPEG)
-        _read io
-        # else
-        #        hdr << io.read(PNG_HDR.size - BMP::MAGIC.size)
-        #        raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless hdr == PNG_HDR
-        #
-        #        _read_png io
+      fmt = nil
+      hdr = String.new
+      ZIMG.magics.keys.sort_by(&:size).each do |magic|
+        hdr << io.read(magic.size - hdr.size) if magic.size > hdr.size
+        if hdr == magic
+          fmt = ZIMG.magics[magic]
+          break
+        end
       end
+
+      raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless fmt
+
+      m = ZIMG.const_get(fmt.to_s.upcase)
+      extend(m)
+      _read io
 
       return if io.eof?
 

@@ -276,3 +276,5 @@ require_relative "jpeg/chunks"
 require_relative "jpeg/decoder"
 require_relative "jpeg/huffman"
 require_relative "jpeg/lossless"
+
+ZIMG.register_format! :jpeg
