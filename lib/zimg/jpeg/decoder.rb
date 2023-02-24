@@ -5,14 +5,12 @@
 module ZIMG
   module JPEG
     class Frame
-      attr_accessor :extended, :progressive, :precision, :scanlines, :samples_per_line, :components
+      attr_accessor :progressive, :scanlines, :samples_per_line, :components
       attr_reader :max_h, :max_v, :mcus_per_line, :mcus_per_column
 
       # sof is a SOF012 chunk
       def initialize(sof, qtables)
-        @extended         = sof.extended?
         @progressive      = sof.progressive?
-        @precision        = sof.bpp
         @scanlines        = sof.height
         @samples_per_line = sof.width
         @components       = sof.components
@@ -301,14 +299,9 @@ module ZIMG
         @successive       = successive
         @successive_prev  = successive_prev
 
-        @precision        = frame.precision
-        @samples_per_line = frame.samples_per_line
-        @scanlines        = frame.scanlines
         @mcus_per_line    = frame.mcus_per_line
         @mcus_per_column  = frame.mcus_per_column
         @progressive      = frame.progressive
-        @max_h            = frame.max_h
-        @max_v            = frame.max_v
 
         @successive_ac_state = 0
         @successive_ac_next_value = nil
@@ -499,7 +492,8 @@ module ZIMG
         k = @spectral_start
         e = @spectral_end
         while k <= e
-          rs = component.huffman_table_ac.decode(@bit_io)
+          break unless (rs = component.huffman_table_ac.decode(@bit_io))
+
           s = rs & 15
           r = rs >> 4
           if s == 0
@@ -571,6 +565,10 @@ module ZIMG
 
         @eobrun -= 1
         @successive_ac_state = 0 if @eobrun == 0
+      rescue NoMethodError => e
+        # catch unexpected end of data (partial_progressive.jpg)
+        raise unless e.to_s["undefined method `<<' for nil:NilClass"]
+        # TODO: show warning
       end
 
       def decode_dc0(component, dst)
