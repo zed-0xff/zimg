@@ -37,18 +37,16 @@ module ZIMG
         break if marker == EOI
 
         case marker[1].ord
-        when 0xc0..0xc2
-          @chunks << (chunk = SOF012.new(marker, io))
-          @width = chunk.width
-          @height = chunk.height
-          @bpp = chunk.bpp
-          @sof = chunk
         when 0xc4 # overlaps with SOF range!
           @chunks << DHT.new(marker, io)
         when 0xcc # overlaps with SOF range!
           @chunks << DAC.new(marker, io)
-        when 0xc1..0xcf
-          @chunks << SOF.new(marker, io)
+        when 0xc0..0xcf
+          @chunks << (chunk = SOF.new(marker, io))
+          @width = chunk.width
+          @height = chunk.height
+          @bpp = chunk.bpp
+          @sof = chunk
         when 0xda
           @chunks << (sos = SOS.new(marker, io))
           # Entropy-Coded Segment starts

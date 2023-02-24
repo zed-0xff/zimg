@@ -8,7 +8,6 @@ module ZIMG
       attr_accessor :progressive, :scanlines, :samples_per_line, :components
       attr_reader :max_h, :max_v, :mcus_per_line, :mcus_per_column
 
-      # sof is a SOF012 chunk
       def initialize(sof, qtables)
         @progressive      = sof.progressive?
         @scanlines        = sof.height

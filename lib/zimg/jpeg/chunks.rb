@@ -86,9 +86,17 @@ module ZIMG
     end
 
     class SOF < Chunk
+      attr_accessor :bpp, :width, :height, :ncomp, :components, :color # for compatibility with IHDR
+
       def initialize(marker, io)
         super
         @id = marker[1].ord & 0xf
+        @bpp, @height, @width, @ncomp = @data.unpack("CnnC")
+        @components = []
+        @ncomp.times do |i|
+          id, hv, qid = @data[6 + i * 3, 3].unpack("CCC")
+          @components << Component.new(id, hv, qid)
+        end
       end
 
       def type
@@ -137,26 +145,10 @@ module ZIMG
       end
 
       def inspect *_params
-        "#{super.chop}#{attributes.join(" ")} >"
-      end
-    end
-
-    class SOF012 < SOF
-      attr_accessor :bpp, :width, :height, :ncomp, :components, :color # for compatibility with IHDR
-
-      def initialize(marker, io)
-        super
-        @bpp, @height, @width, @ncomp = @data.unpack("CnnC")
-        @components = []
-        @ncomp.times do |i|
-          id, hv, qid = @data[6 + i * 3, 3].unpack("CCC")
-          @components << Component.new(id, hv, qid)
-        end
-      end
-
-      def inspect(verbose = 0)
-        r = super.chop + format("bpp=%d width=%d height=%d ncomp=%d >", bpp, width, height, ncomp)
-        r.chop + format("components=%s >", components.inspect)
+        super.chop +
+          attributes.join(" ") +
+          format("bpp=%d width=%d height=%d ncomp=%d >", bpp, width, height, ncomp) +
+          format("components=%s >", components.inspect)
       end
     end
 
