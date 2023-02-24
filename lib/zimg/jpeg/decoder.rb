@@ -67,12 +67,27 @@ module ZIMG
         @qtable = qtables[qid]
         raise "no qtable ##{qid}" unless @qtable
 
-        @scale_x = h / frame.max_h
-        @scale_y = v / frame.max_v
+        @scale_x = 1.0 * h / frame.max_h
+        @scale_y = 1.0 * v / frame.max_v
       end
 
-      def decoded_data
-        @decoded_data ||= _decode
+      def to_enum(width, height)
+        Enumerator.new do |e|
+          y = 0
+          height.times do
+            line = decoded_lines[y]
+            x = 0
+            width.times do
+              e << line.getbyte(x)
+              x += @scale_x
+            end
+            y += @scale_y
+          end
+        end
+      end
+
+      def decoded_lines
+        @decoded_lines ||= _decode
       end
 
       def _decode
@@ -99,7 +114,7 @@ module ZIMG
             end
           end
         end
-        lines.join
+        lines
       end
 
       DCT_COS_1    = 4017  # cos(pi/16)
@@ -147,12 +162,12 @@ module ZIMG
           # stage 4
           v0 = (DCT_SQRT_2 * p[0 + row] + 128) >> 8
           v1 = (DCT_SQRT_2 * p[4 + row] + 128) >> 8
-          v2 = p[2 + row]
-          v3 = p[6 + row]
           v4 = (DCT_SQRT_2D2 * (p[1 + row] - p[7 + row]) + 128) >> 8
           v7 = (DCT_SQRT_2D2 * (p[1 + row] + p[7 + row]) + 128) >> 8
+          v2 = p[2 + row]
           v5 = p[3 + row] << 4
           v6 = p[5 + row] << 4
+          v3 = p[6 + row]
 
           # stage 3
           t = (v0 - v1 + 1) >> 1
@@ -184,13 +199,13 @@ module ZIMG
 
           # stage 1
           p[0 + row] = v0 + v7
-          p[7 + row] = v0 - v7
           p[1 + row] = v1 + v6
-          p[6 + row] = v1 - v6
           p[2 + row] = v2 + v5
-          p[5 + row] = v2 - v5
           p[3 + row] = v3 + v4
           p[4 + row] = v3 - v4
+          p[5 + row] = v2 - v5
+          p[6 + row] = v1 - v6
+          p[7 + row] = v0 - v7
         end
 
         # inverse DCT on columns
@@ -216,12 +231,12 @@ module ZIMG
           # stage 4
           v0 = (DCT_SQRT_2 * p[0 * 8 + col] + 2048) >> 12
           v1 = (DCT_SQRT_2 * p[4 * 8 + col] + 2048) >> 12
-          v2 = p[2 * 8 + col]
-          v3 = p[6 * 8 + col]
           v4 = (DCT_SQRT_2D2 * (p[1 * 8 + col] - p[7 * 8 + col]) + 2048) >> 12
           v7 = (DCT_SQRT_2D2 * (p[1 * 8 + col] + p[7 * 8 + col]) + 2048) >> 12
+          v2 = p[2 * 8 + col]
           v5 = p[3 * 8 + col]
           v6 = p[5 * 8 + col]
+          v3 = p[6 * 8 + col]
 
           # stage 3
           t = (v0 - v1 + 1) >> 1
@@ -253,13 +268,13 @@ module ZIMG
 
           # stage 1
           p[0 * 8 + col] = v0 + v7
-          p[7 * 8 + col] = v0 - v7
           p[1 * 8 + col] = v1 + v6
-          p[6 * 8 + col] = v1 - v6
           p[2 * 8 + col] = v2 + v5
-          p[5 * 8 + col] = v2 - v5
           p[3 * 8 + col] = v3 + v4
           p[4 * 8 + col] = v3 - v4
+          p[5 * 8 + col] = v2 - v5
+          p[6 * 8 + col] = v1 - v6
+          p[7 * 8 + col] = v0 - v7
         end
 
         # convert to 8-bit integers

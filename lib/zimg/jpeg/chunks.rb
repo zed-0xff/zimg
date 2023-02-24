@@ -1,5 +1,7 @@
 # -*- coding:binary; frozen_string_literal: true -*-
 
+# https://exiftool.org/TagNames/JPEG.html
+
 module ZIMG
   module JPEG
     class Chunk
@@ -32,7 +34,7 @@ module ZIMG
     end
 
     class APP < Chunk
-      attr_accessor :name
+      attr_accessor :name, :tag
 
       # BYTE Version[2];      /* 07h  JFIF Format Revision      */
       # BYTE Units;           /* 09h  Units used for Resolution */
@@ -43,7 +45,15 @@ module ZIMG
       class JFIF < IOStruct.new("vcnncc", :version, :units, :xdensity, :ydensity, :xthumbnail, :ythumbnail)
         def inspect *args
           r = "<#{super.split(" ", 3).last}"
-          r.sub!(/version=\d+/, "version=#{version >> 8}.#{version & 0xff}") if version
+          r.sub!(/version=\d+/, "version=0x#{version.to_s(16)}") if version
+          r
+        end
+      end
+
+      class Adobe < IOStruct.new("cnnc", :version, :flags0, :flags1, :color_transform)
+        def inspect *args
+          r = "<#{super.split(" ", 3).last}"
+          r.sub!(/version=\d+/, "version=0x#{version.to_s(16)}") if version
           r
         end
       end
@@ -52,9 +62,15 @@ module ZIMG
         super
         @id = marker[1].ord & 0xf
         @name = @data.unpack1("Z*")
-        return unless @name == "JFIF"
+        case @name
+        when "JFIF"
+          # APP0
+          @tag = JFIF.read(@data[(@name.size + 1)..])
+        when "Adobe"
+          # APP14
+          @tag = Adobe.read(@data[(@name.size + 1)..])
+        end
 
-        @jfif = JFIF.read(@data[5..])
         # TODO: read thumbnail, see https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format
       end
 
@@ -64,7 +80,7 @@ module ZIMG
 
       def inspect *args
         r = super.chop + format("name=%s >", name.inspect)
-        r = r.chop + format("jfif=%s>", @jfif.inspect) if @jfif
+        r = r.chop + format("tag=%s>", @tag.inspect) if @tag
         r
       end
     end

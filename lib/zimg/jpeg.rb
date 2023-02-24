@@ -3,7 +3,6 @@
 # https://github.com/corkami/formats/blob/master/image/jpeg.md
 # https://docs.fileformat.com/image/jpeg/
 # https://www.file-recovery.com/jpg-signature-format.htm
-# https://exiftool.org/TagNames/JPEG.html
 
 module ZIMG
   module JPEG
@@ -75,7 +74,163 @@ module ZIMG
       end
     end
 
+    def clamp8bit(x)
+      if x < 0
+        0
+      else
+        (x > 0xFF ? 0xFF : x)
+      end
+    end
+
+    def to_rgb
+      src = components2imagedata
+      dst = nil
+      pos = -1
+      case components.size
+      when 1
+        # grayscale -> RGB
+        dst = "\x00" * width * height * 3
+        src.each_byte do |b|
+          dst.setbyte(pos += 1, b)
+          dst.setbyte(pos += 1, b)
+          dst.setbyte(pos += 1, b)
+        end
+      when 3
+        # already in RGB
+        dst = src
+      when 4
+        # CMYK -> RGB
+        dst = "\x00" * width * height * 3
+        i = -1
+        while i < src.size - 1
+          c = src.getbyte(i += 1)
+          m = src.getbyte(i += 1)
+          y = src.getbyte(i += 1)
+          k = src.getbyte(i += 1)
+          dst.setbyte(pos += 1, 255 - clamp8bit(c * (1 - k / 255.0) + k)) # r
+          dst.setbyte(pos += 1, 255 - clamp8bit(m * (1 - k / 255.0) + k)) # g
+          dst.setbyte(pos += 1, 255 - clamp8bit(y * (1 - k / 255.0) + k)) # b
+        end
+      else
+        raise "unexpected number of components: #{nc}"
+      end
+      dst
+    end
+
+    def to_rgba
+      src = components2imagedata
+      dst = "\xff" * width * height * 4
+      pos = -1
+      case components.size
+      when 1
+        # grayscale -> RGBA
+        src.each_byte do |b|
+          dst.setbyte(pos += 1, b)
+          dst.setbyte(pos += 1, b)
+          dst.setbyte(pos += 1, b)
+          pos += 1 # alpha
+        end
+      when 3
+        # RGB -> RGBA
+        i = -1
+        while i < src.size - 1
+          dst.setbyte(pos += 1, src.getbyte(i += 1))
+          dst.setbyte(pos += 1, src.getbyte(i += 1))
+          dst.setbyte(pos += 1, src.getbyte(i += 1))
+          pos += 1 # alpha
+        end
+      when 4
+        # CMYK -> RGBA
+        i = -1
+        while i < src.size - 1
+          c = src.getbyte(i += 1)
+          m = src.getbyte(i += 1)
+          y = src.getbyte(i += 1)
+          k = src.getbyte(i += 1)
+          dst.setbyte(pos += 1, 255 - clamp8bit(c * (1 - k / 255.0) + k)) # r
+          dst.setbyte(pos += 1, 255 - clamp8bit(m * (1 - k / 255.0) + k)) # g
+          dst.setbyte(pos += 1, 255 - clamp8bit(y * (1 - k / 255.0) + k)) # b
+          pos += 1 # alpha
+        end
+      else
+        raise "unexpected number of components: #{nc}"
+      end
+      dst
+    end
+
+    def components2imagedata(color_transform: nil)
+      enums = components.map { |c| c.to_enum(width, height) }
+      result = "\x00" * width * height * components.size
+      pos = -1
+      nc = components.size
+      case nc
+      when 1
+        # grayscale
+        enums[0].each do |g|
+          result.setbyte(pos += 1, g)
+        end
+      when 2
+        # ??
+        raise "TBD"
+      when 3
+        # RGB, default color_transform = true
+        color_transform = true if color_transform.nil?
+        if color_transform
+          enums[0].zip(*enums[1..]) do |y, cb, cr|
+            r = clamp8bit(y + 1.402 * (cr - 128))
+            g = clamp8bit(y - 0.3441363 * (cb - 128) - 0.71413636 * (cr - 128))
+            b = clamp8bit(y + 1.772 * (cb - 128))
+            result.setbyte(pos += 1, r)
+            result.setbyte(pos += 1, g)
+            result.setbyte(pos += 1, b)
+          end
+        else
+          enums[0].zip(*enums[1..]) do |r, g, b|
+            result.setbyte(pos += 1, r)
+            result.setbyte(pos += 1, g)
+            result.setbyte(pos += 1, b)
+          end
+        end
+      when 4
+        # CMYK, default color_transform = false
+        if color_transform.nil?
+          app14 = @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::Adobe) }
+          # get from APP14 "Adobe" tag
+          color_transform = true if app14.tag.color_transform.to_i > 0
+        end
+        if color_transform
+          enums[0].zip(*enums[1..]) do |y, cb, cr, k|
+            c = clamp8bit(y + 1.402 * (cr - 128))
+            m = clamp8bit(y - 0.3441363 * (cb - 128) - 0.71413636 * (cr - 128))
+            y = clamp8bit(y + 1.772 * (cb - 128))
+            result.setbyte(pos += 1, c)
+            result.setbyte(pos += 1, m)
+            result.setbyte(pos += 1, y)
+            result.setbyte(pos += 1, 255 - k)
+          end
+        else
+          enums[0].zip(*enums[1..]) do |c, m, y, k|
+            result.setbyte(pos += 1, 255 - c)
+            result.setbyte(pos += 1, 255 - m)
+            result.setbyte(pos += 1, 255 - y)
+            result.setbyte(pos += 1, 255 - k)
+          end
+        end
+      else
+        raise "unexpected number of components: #{nc}"
+      end
+      result
+    end
+
+    def components
+      @components ||= _decode_components
+    end
+
     def components_data
+      components.map { |c| c.decoded_lines.join }
+    end
+
+    def _decode_components
       # Huffman tables
       huffman_tables_dc = {}
       huffman_tables_ac = {}
@@ -107,7 +262,7 @@ module ZIMG
           d.decode_scan
         end
       end
-      frame.components.map(&:decoded_data)
+      frame.components
     end
   end
 end
