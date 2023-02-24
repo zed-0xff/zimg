@@ -75,6 +75,9 @@ module ZIMG
         opts.on "--fail-fast [N]", Integer, "Abort the run after a certain number of failures (1 by default)." do |n|
           @options[:fail_fast] = n || 1
         end
+        opts.on("--backtrace", "Enable full backtrace") { @options[:backtrace] = true }
+
+        opts.separator ""
         opts.on "-v", "--verbose", "Run verbosely (can be used multiple times)" do
           @options[:verbose] += 1
         end
@@ -123,7 +126,12 @@ module ZIMG
       # prevents a 'Broken pipe - <STDOUT> (Errno::EPIPE)' message
       true
     rescue StandardError => e
-      warn "[!] #{e} at #{e.backtrace[0]}".red
+      warn "[!] #{e}".red
+      if @options[:backtrace]
+        e.backtrace.each do |line|
+          warn line.red
+        end
+      end
       false
     end
 
