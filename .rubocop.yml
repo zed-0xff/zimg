@@ -37,15 +37,9 @@ Style/CommentedKeyword:       { Enabled: false }
 Style/Documentation:          { Enabled: false }
 Style/FormatStringToken:      { Enabled: false }
 Style/MinMaxComparison:       { Enabled: false }
-Style/NumericPredicate:       { Enabled: false }
 Style/NegatedIfElseCondition: { Enabled: false }
+Style/NumericPredicate:       { Enabled: false }
 Style/ParallelAssignment:     { Enabled: false }
-
-Style/StringLiterals:
-  Enabled: true
-  EnforcedStyle: double_quotes
-
-Style/StringLiteralsInInterpolation:
-  Enabled: true
-  EnforcedStyle: double_quotes
-
+Style/StringLiterals:         { EnforcedStyle: double_quotes }
+Style/StringLiteralsInInterpolation: { EnforcedStyle: double_quotes }
+Style/TrailingCommaInHashLiteral:    { EnforcedStyleForMultiline: consistent_comma }

@@ -42,11 +42,11 @@ module ZIMG
       when JPEG::MAGIC
         extend(JPEG)
         _read io
-      else
-#        hdr << io.read(PNG_HDR.size - BMP::MAGIC.size)
-#        raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless hdr == PNG_HDR
-#
-#        _read_png io
+        # else
+        #        hdr << io.read(PNG_HDR.size - BMP::MAGIC.size)
+        #        raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless hdr == PNG_HDR
+        #
+        #        _read_png io
       end
 
       return if io.eof?

@@ -2,7 +2,7 @@
 
 require "zimg/cli"
 
-each_sample("jpeg/**/*.jpg") do |fname|
+each_sample("jpeg/jpeg-js/**/*.jpg") do |fname|
   bname = File.basename(fname)
   RSpec.describe bname do
     it "is readable by CLI" do

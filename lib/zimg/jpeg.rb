@@ -250,6 +250,12 @@ module ZIMG
         when DRI
           reset_interval = chunk.reset_interval
         when SOS
+          if huffman_tables_dc.empty? && huffman_tables_ac.empty?
+            # https://bugzilla.mozilla.org/show_bug.cgi?id=963907
+            Huffman.default_tables.each do |id, tbl|
+              ((id >> 4) == 0 ? huffman_tables_dc : huffman_tables_ac)[id & 15] = tbl
+            end
+          end
           sos = chunk
           components = sos.components.map do |idx, table_spec|
             comp = frame.components.find { |c| c.id == idx }

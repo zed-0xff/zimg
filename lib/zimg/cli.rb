@@ -107,7 +107,7 @@ module ZIMG
       nfails == 0
     end
 
-    def process_file fname
+    def process_file(fname)
       @fname = fname
       @zimg = load_file fname
       @actions.each do |action|
@@ -121,10 +121,10 @@ module ZIMG
     rescue Errno::EPIPE
       # output interrupt, f.ex. when piping output to a 'head' command
       # prevents a 'Broken pipe - <STDOUT> (Errno::EPIPE)' message
-      return true
-    rescue => e
-      STDERR.puts "[!] #{e} at #{e.backtrace[0]}".red
-      return false
+      true
+    rescue StandardError => e
+      warn "[!] #{e} at #{e.backtrace[0]}".red
+      false
     end
 
     def load_file(fname)

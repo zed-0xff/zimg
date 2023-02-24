@@ -42,7 +42,7 @@ module ZIMG
           width:  bmp_hdr.biWidth,
           height: bmp_hdr.biHeight.abs,
           type:   "BITMAPINFOHEADER",
-          crc:    :no_crc # for CLI
+          crc:    :no_crc, # for CLI
         }
         if bmp_hdr.biBitCount == 8
           h[:color] = COLOR_INDEXED
