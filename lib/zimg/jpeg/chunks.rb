@@ -94,6 +94,51 @@ module ZIMG
       def type
         "SOF#{@id}"
       end
+
+      def baseline?
+        @id == 0
+      end
+
+      def differential?
+        [5, 6, 7, 13, 14, 15].include?(@id)
+      end
+
+      def progressive?
+        coding_process == :progressive
+      end
+
+      def coding_process
+        case @id
+        when 0, 1, 5, 9, 13
+          :sequential
+        when 2, 6, 10, 14
+          :progressive
+        when 3, 7, 11, 15
+          :lossless
+        end
+      end
+
+      def entropy_coding
+        case @id
+        when 0, 1, 2, 3, 5, 6, 7
+          :huffman
+        when 9, 10, 11, 13, 14, 15
+          :arithmetic
+        end
+      end
+
+      def attributes
+        a = []
+        a << :baseline if baseline?
+        a << :differential if differential?
+        a << coding_process
+        a << entropy_coding
+        a.compact
+      end
+
+      def inspect *_params
+        "#{super.chop}#{attributes.join(" ")} >"
+      end
     end
 
     class SOF012 < SOF
@@ -109,24 +154,8 @@ module ZIMG
         end
       end
 
-      def extended?
-        @id == 1 # SOF1
-      end
-
-      def progressive?
-        @id == 2 # SOF2
-      end
-
       def inspect(verbose = 0)
-        kind =
-          if extended?
-            "extended "
-          elsif progressive?
-            "progressive "
-          else
-            ""
-          end
-        r = super.chop + format("%sbpp=%d width=%d height=%d ncomp=%d >", kind, bpp, width, height, ncomp)
+        r = super.chop + format("bpp=%d width=%d height=%d ncomp=%d >", bpp, width, height, ncomp)
         r.chop + format("components=%s >", components.inspect)
       end
     end
