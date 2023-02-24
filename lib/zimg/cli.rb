@@ -72,6 +72,9 @@ module ZIMG
         end
 
         opts.separator ""
+        opts.on "--fail-fast [N]", Integer, "Abort the run after a certain number of failures (1 by default)." do |n|
+          @options[:fail_fast] = n || 1
+        end
         opts.on "-v", "--verbose", "Run verbosely (can be used multiple times)" do
           @options[:verbose] += 1
         end
@@ -90,26 +93,38 @@ module ZIMG
 
       @actions = DEFAULT_ACTIONS if @actions.empty?
 
+      nfails = 0
       argv.each_with_index do |fname, idx|
         if argv.size > 1 && @options[:verbose] >= 0
           puts if idx > 0
           puts "[.] #{fname}".color(:green)
         end
-        @fname = fname
-
-        @zimg = load_file fname
-
-        @actions.each do |action|
-          if action.is_a?(Array)
-            send(*action)
-          else
-            send(action)
-          end
+        unless process_file(fname)
+          nfails += 1
+          break if @options[:fail_fast] && nfails >= @options[:fail_fast]
         end
       end
+      nfails == 0
+    end
+
+    def process_file fname
+      @fname = fname
+      @zimg = load_file fname
+      @actions.each do |action|
+        if action.is_a?(Array)
+          send(*action)
+        else
+          send(action)
+        end
+      end
+      true
     rescue Errno::EPIPE
       # output interrupt, f.ex. when piping output to a 'head' command
       # prevents a 'Broken pipe - <STDOUT> (Errno::EPIPE)' message
+      return true
+    rescue => e
+      STDERR.puts "[!] #{e} at #{e.backtrace[0]}".red
+      return false
     end
 
     def load_file(fname)

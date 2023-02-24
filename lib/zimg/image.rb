@@ -12,6 +12,7 @@ module ZIMG
     #   Hash    of image parameters to create new blank image
     def initialize(x, h = {})
       @chunks = []
+      @extradata = []
       @verbose =
         case h[:verbose]
         when true then  1
@@ -42,11 +43,10 @@ module ZIMG
         extend(JPEG)
         _read io
       else
-        hdr << io.read(PNG_HDR.size - BMP::MAGIC.size)
-        raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless hdr == PNG_HDR
-
-        _read_png io
-
+#        hdr << io.read(PNG_HDR.size - BMP::MAGIC.size)
+#        raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless hdr == PNG_HDR
+#
+#        _read_png io
       end
 
       return if io.eof?

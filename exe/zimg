@@ -4,4 +4,4 @@
 require_relative "../lib/zimg"
 require_relative "../lib/zimg/cli"
 
-ZIMG::CLI.new.run
+exit(1) unless ZIMG::CLI.new.run
