@@ -9,7 +9,7 @@ each_sample("jpeg/**/*.{cmyk,rgb,rgba}") do |dst_fname|
   RSpec.describe src_fname do
     it "matches #{dst_bname}" do
       dst = File.binread(dst_fname)
-      src = ZIMG::Image.load(src_fname)
+      src = ZIMG.load(src_fname)
       src =
         case dst_format
         when "rgb"

@@ -136,7 +136,7 @@ module ZIMG
     end
 
     def load_file(fname)
-      @img = Image.load fname, verbose: @options[:verbose] + 1
+      @img = ZIMG.load fname, verbose: @options[:verbose] + 1
     end
 
     def info

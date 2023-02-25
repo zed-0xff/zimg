@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
+require "rspec/its"
 require "zimg"
+
+Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].sort.each { |f| require f }
 
 SAMPLES_DIR = File.join(
   File.dirname(
@@ -10,6 +13,8 @@ SAMPLES_DIR = File.join(
   ),
   "samples"
 )
+
+PNGSuite.init(File.join(SAMPLES_DIR, "png", "png_suite"))
 
 def each_sample(glob)
   Dir[File.join(SAMPLES_DIR, glob)].each do |fname|

@@ -4,6 +4,17 @@ require "iostruct"
 
 module ZIMG
   module BMP
+    TypedBlock = Struct.new(:type, :size, :offset, :data) do # rubocop:disable Lint/StructNewOverride
+      def inspect
+        # string length of 16 is for alignment with BITMAP....HEADER chunks on CLI output
+        format("<%s size=%-5d (0x%-4x) offset=%-5d (0x%-4x)>", type, size, size, offset, offset)
+      end
+
+      def pack
+        data
+      end
+    end
+
     class BITMAPFILEHEADER < IOStruct.new "VvvV", # a2VvvV',
       # :bfType,
       :bfSize,      # the size of the BMP file in bytes
@@ -34,7 +45,7 @@ module ZIMG
       end
     end
 
-    class BmpHdrPseudoChunk < Chunk # ::IHDR
+    class BmpHdrPseudoChunk < PNG::Chunk::IHDR
       # bmp_hdr is a BITMAPINFOHEADER
       def initialize(bmp_hdr)
         @bmp_hdr = bmp_hdr
@@ -71,7 +82,7 @@ module ZIMG
       end
     end
 
-    class BmpPseudoChunk < Chunk
+    class BmpPseudoChunk < PNG::Chunk
       def initialize(struct)
         @struct = struct
         type =
@@ -106,7 +117,7 @@ module ZIMG
       end
     end
 
-    class BmpPaletteChunk < Chunk # ::PLTE
+    class BmpPaletteChunk < PNG::Chunk # ::PLTE
       def initialize(data)
         super(
           crc:  :no_crc,
@@ -131,23 +142,6 @@ module ZIMG
 
       def inspect *_args
         format("<%s ncolors=%d>", "PALETTE", size / 4)
-      end
-    end
-
-    class Color < ZIMG::Color
-      # BMP pixels are in perverted^w reverted order - BGR instead of RGB
-      def initialize *a
-        h = a.last.is_a?(Hash) ? a.pop : {}
-        case a.size
-        when 3
-          # BGR
-          super(*a.reverse, h)
-        when 4
-          # ABGR
-          super a[2], a[1], a[0], a[3], h
-        else
-          super
-        end
       end
     end
   end # BMP

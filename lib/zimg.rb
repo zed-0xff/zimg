@@ -24,6 +24,13 @@ module ZIMG
       m = const_get(fmt.to_s.upcase)
       @magics[m.const_get("MAGIC")] = fmt
     end
+
+    # load image from file
+    def load(fname, h = {})
+      File.open(fname, "rb") do |f|
+        Image.new(f, h)
+      end
+    end
   end
 end
 
@@ -32,6 +39,7 @@ require_relative "zimg/utils/string_ext"
 require_relative "zimg/chunk"
 require_relative "zimg/color"
 
+require_relative "zimg/png"
 require_relative "zimg/bmp"
 require_relative "zimg/jpeg"
 

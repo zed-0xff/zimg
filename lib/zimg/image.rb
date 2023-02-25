@@ -4,7 +4,7 @@ require "stringio"
 
 module ZIMG
   class Image
-    attr_reader :width, :height, :bpp, :palette, :metadata, :chunks
+    attr_reader :width, :height, :bpp, :palette, :metadata, :chunks, :format, :color_class, :scanlines
 
     # possible input params:
     #   IO      of opened image file
@@ -12,6 +12,7 @@ module ZIMG
     #   Hash    of image parameters to create new blank image
     def initialize(x, h = {})
       @chunks = []
+      @color_class = Color
       @extradata = []
       @verbose =
         case h[:verbose]
@@ -47,9 +48,10 @@ module ZIMG
 
       raise NotSupported, "Unsupported header #{hdr.inspect} in #{io.inspect}" unless fmt
 
+      @format = fmt
       m = ZIMG.const_get(fmt.to_s.upcase)
       extend(m)
-      _read io
+      send("read_#{fmt}", io)
 
       return if io.eof?
 
@@ -60,14 +62,55 @@ module ZIMG
       warn "[?] #{@extradata.last.size} bytes of extra data after image end (IEND), offset = 0x#{offset.to_s(16)}".red
     end
 
+    # flag that image is just created, and NOT loaded from file
+    # as in Rails' ActiveRecord::Base#new_record?
+    def new_image?
+      @new_image
+    end
+    alias new? new_image?
+
+    def imagedata_size
+      if new_image?
+        @scanlines&.map(&:size)&.inject(&:+)
+      else
+        imagedata&.size
+      end
+    end
+
+    def ==(other)
+      return false unless other.is_a?(Image)
+      return false if width  != other.width
+      return false if height != other.height
+
+      each_pixel do |c, x, y|
+        return false if c != other[x, y]
+      end
+      true
+    end
+
+    def each_pixel(&block)
+      e = Enumerator.new do |ee|
+        height.times do |y|
+          width.times do |x|
+            ee.yield(self[x, y], x, y)
+          end
+        end
+      end
+      block_given? ? e.each(&block) : e
+    end
+
+    def [](x, y)
+      scanlines[y][x]
+    end
+
     def inspect
       info =
-        %w[width height bpp chunks scanlines].map do |k|
+        %w[format width height bpp chunks scanlines].map do |k|
           next unless respond_to?(k)
 
           v = case (v = send(k))
               when Array
-                "[#{v.size} entries]"
+                v.empty? ? "[]" : "[#{v.size} entries]"
               when String
                 v.size > 40 ? "[#{v.bytesize} bytes]" : v.inspect
               else v.inspect
@@ -75,17 +118,6 @@ module ZIMG
           "#{k}=#{v}"
         end.compact.join(", ")
       format("#<ZIMG::Image %s>", info)
-    end
-
-    class << self
-      # load image from file
-      def load(fname, h = {})
-        File.open(fname, "rb") do |f|
-          new(f, h)
-        end
-      end
-      alias load_file load
-      alias from_file load # as in ChunkyPNG
     end
   end
 end

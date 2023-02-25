@@ -29,9 +29,7 @@ module ZIMG
       63
     ].freeze
 
-    def _read(io)
-      @format = :jpeg
-
+    def read_jpeg(io)
       until io.eof?
         marker = io.read(2)
         break if marker == EOI

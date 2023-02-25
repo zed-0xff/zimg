@@ -8,4 +8,12 @@ RSpec.describe ZIMG do
   it "supports JPEG" do
     expect(described_class.supported_formats).to include(:jpeg)
   end
+
+  it "supports PNG" do
+    expect(described_class.supported_formats).to include(:png)
+  end
+
+  it "supports BMP" do
+    expect(described_class.supported_formats).to include(:bmp)
+  end
 end
