@@ -277,11 +277,11 @@ module ZIMG
         # convert to 8-bit integers
         64.times do |i|
           sample = 128 + ((p[i] + 8) >> 4)
-          data_out[i] = (if sample < 0
-                           0
-                         else
-                           (sample > 0xFF ? 0xFF : sample)
-                         end).chr
+          data_out.setbyte(i, (if sample < 0
+                                 0
+                               else
+                                 (sample > 0xFF ? 0xFF : sample)
+                               end))
         end
         data_out
       end
