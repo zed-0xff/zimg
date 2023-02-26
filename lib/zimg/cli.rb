@@ -209,6 +209,22 @@ module ZIMG
       end
     end
 
+    def scanlines
+      @img.scanlines.each do |sl|
+        p sl # rubocop:disable Lint/Debugger
+        case @options[:verbose]
+        when 1
+          hexdump(sl.raw_data) if sl.raw_data
+        when 2
+          hexdump(sl.decoded_bytes)
+        when 3..999
+          hexdump(sl.raw_data) if sl.raw_data
+          hexdump(sl.decoded_bytes)
+          puts
+        end
+      end
+    end
+
     def _conditional_hexdump(data, v2 = 2)
       return unless data
 
@@ -227,6 +243,38 @@ module ZIMG
         dump = String.new
         ZHexdump.dump(data, output: dump) { |row| row.insert(0, "    ") }
         puts dump.gray
+      end
+    end
+
+    def ascii
+      @img.height.times do |y|
+        @img.width.times do |x|
+          c = @img[x, y].to_ascii(*[@options[:ascii_string]].compact)
+          c *= 2 if @options[:wide]
+          print c
+        end
+        puts
+      end
+    end
+
+    def ansi
+      spc = @options[:wide] ? "  " : " "
+      @img.height.times do |y|
+        @img.width.times do |x|
+          print spc.background(@img[x, y].to_ansi)
+        end
+        puts
+      end
+    end
+
+    def ansi256
+      require "rainbow"
+      spc = @options[:wide] ? "  " : " "
+      @img.height.times do |y|
+        @img.width.times do |x|
+          print spc.background(@img[x, y].to_html)
+        end
+        puts
       end
     end
   end

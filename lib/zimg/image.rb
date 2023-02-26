@@ -4,7 +4,10 @@ require "stringio"
 
 module ZIMG
   class Image
-    attr_reader :width, :height, :bpp, :palette, :metadata, :chunks, :format, :color_class, :scanlines
+    include DeepCopyable
+
+    attr_reader :width, :height, :bpp, :palette, :metadata, :chunks, :format, :color_class, :verbose
+    attr_accessor :scanlines
 
     # possible input params:
     #   IO      of opened image file
@@ -27,6 +30,9 @@ module ZIMG
       when String
         _from_io StringIO.new(x)
       when Hash
+        # XXX currently implicitly creates PNG
+        extend PNG
+        @format = :png
         _from_hash x
       else
         raise NotSupported, "unsupported input data type #{x.class}"
@@ -118,6 +124,14 @@ module ZIMG
           "#{k}=#{v}"
         end.compact.join(", ")
       format("#<ZIMG::Image %s>", info)
+    end
+
+    def to_ascii *args
+      scanlines&.map { |l| l.to_ascii(*args) }&.join("\n")
+    end
+
+    def pixels
+      Pixels.new(self)
     end
   end
 end

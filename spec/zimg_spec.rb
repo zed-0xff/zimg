@@ -16,4 +16,8 @@ RSpec.describe ZIMG do
   it "supports BMP" do
     expect(described_class.supported_formats).to include(:bmp)
   end
+
+  it "raises ZIMG::NotSupported on unknown file" do
+    expect { described_class.load(__FILE__) }.to raise_error(ZIMG::NotSupported)
+  end
 end

@@ -224,7 +224,7 @@ module ZIMG
         end
 
         def []=(idx, color)
-          @data ||= ""
+          @data ||= String.new
           @data[idx * 3, 3] = [color.r, color.g, color.b].pack("C3")
         end
 

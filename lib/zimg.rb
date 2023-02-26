@@ -31,6 +31,14 @@ module ZIMG
         Image.new(f, h)
       end
     end
+
+    def from_rgb(data, width:, height:)
+      PNG.from_rgb(data, width: width, height: height)
+    end
+
+    def from_rgba(data, width:, height:)
+      PNG.from_rgba(data, width: width, height: height)
+    end
   end
 end
 
@@ -44,4 +52,5 @@ require_relative "zimg/bmp"
 require_relative "zimg/jpeg"
 
 require_relative "zimg/image"
+require_relative "zimg/pixels"
 require_relative "zimg/version"

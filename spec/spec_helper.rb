@@ -14,10 +14,15 @@ SAMPLES_DIR = File.join(
   "samples"
 )
 
-PNGSuite.init(File.join(SAMPLES_DIR, "png", "png_suite"))
+PNG_SAMPLES_DIR = File.join(SAMPLES_DIR, "png")
+
+PNGSuite.init(File.join(PNG_SAMPLES_DIR, "png_suite"))
 
 def each_sample(glob)
-  Dir[File.join(SAMPLES_DIR, glob)].each do |fname|
+  samples = Dir[File.join(SAMPLES_DIR, glob)]
+  raise "[?] no samples for #{glob}" if samples.empty?
+
+  samples.each do |fname|
     yield fname.sub("#{Dir.pwd}/", "")
   end
 end
