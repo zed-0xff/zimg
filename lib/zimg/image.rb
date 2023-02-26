@@ -123,7 +123,7 @@ module ZIMG
               end
           "#{k}=#{v}"
         end.compact.join(", ")
-      format("#<ZIMG::Image %s>", info)
+      Kernel.format("#<ZIMG::Image %s>", info)
     end
 
     def to_ascii *args
@@ -132,6 +132,10 @@ module ZIMG
 
     def pixels
       Pixels.new(self)
+    end
+
+    def alpha_used?
+      false
     end
   end
 end
