@@ -67,6 +67,10 @@ module ZIMG
       ihdr && @ihdr.interlace != 0
     end
 
+    def alpha_used?
+      ihdr && @ihdr.alpha_used?
+    end
+
     def adam7
       @adam7 ||= Adam7Decoder.new(width, height, bpp)
     end
@@ -162,6 +166,21 @@ module ZIMG
         height.times.map { |y| width.times.map { |x| self[x, y].to_ascii(*args) }.join }.join("\n")
       else
         scanlines.map { |l| l.to_ascii(*args) }.join("\n")
+      end
+    end
+
+    def to_rgb
+      if hdr.color == COLOR_RGB
+        scanlines.map(&:decoded_bytes).join
+      else
+        r = "\x00" * 3 * width * height
+        i = -1
+        each_pixel do |p|
+          r.setbyte(i += 1, p.r)
+          r.setbyte(i += 1, p.g)
+          r.setbyte(i += 1, p.b)
+        end
+        r
       end
     end
 
