@@ -113,6 +113,10 @@ module ZIMG
       dst
     end
 
+    def to_png
+      ZIMG.from_rgb to_rgb, width: width, height: height
+    end
+
     def to_rgba
       src = components2imagedata
       dst = "\xff" * width * height * 4
