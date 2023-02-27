@@ -72,8 +72,8 @@ module ZIMG
       end
       @colorspace = Colorspace.detect(
         components: @sof.components,
-        adobe: @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::Adobe) }&.tag,
-        jfif: @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::JFIF) }&.tag,
+        adobe:      @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::Adobe) }&.tag,
+        jfif:       @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::JFIF) }&.tag
       )
     end
 
@@ -86,38 +86,9 @@ module ZIMG
     end
 
     def to_rgb
-      src = components2imagedata
-      dst = nil
-      pos = -1
-      case components.size
-      when 1
-        # grayscale -> RGB
-        dst = "\x00" * width * height * 3
-        src.each_byte do |b|
-          dst.setbyte(pos += 1, b)
-          dst.setbyte(pos += 1, b)
-          dst.setbyte(pos += 1, b)
-        end
-      when 3
-        # already in RGB
-        dst = src
-      when 4
-        # CMYK -> RGB
-        dst = "\x00" * width * height * 3
-        i = -1
-        while i < src.size - 1
-          c = src.getbyte(i += 1)
-          m = src.getbyte(i += 1)
-          y = src.getbyte(i += 1)
-          k = src.getbyte(i += 1)
-          dst.setbyte(pos += 1, 255 - clamp8bit(c * (1 - k / 255.0) + k)) # r
-          dst.setbyte(pos += 1, 255 - clamp8bit(m * (1 - k / 255.0) + k)) # g
-          dst.setbyte(pos += 1, 255 - clamp8bit(y * (1 - k / 255.0) + k)) # b
-        end
-      else
-        raise "unexpected number of components: #{nc}"
-      end
-      dst
+      enums = components.map { |c| c.to_enum(width, height) }
+      result = "\x00" * width * height * 3
+      colorspace.to_rgb(enums, result)
     end
 
     def to_png
@@ -219,6 +190,7 @@ end
 
 require_relative "jpeg/chunks"
 require_relative "jpeg/colorspace"
+require_relative "jpeg/idct"
 require_relative "jpeg/decoder"
 require_relative "jpeg/huffman"
 require_relative "jpeg/lossless"

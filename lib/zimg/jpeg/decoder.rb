@@ -35,6 +35,8 @@ module ZIMG
       # externally-calculated values
       attr_accessor :huffman_table_ac, :huffman_table_dc, :pred, :scale_x, :scale_y
 
+      include IDCT
+
       def initialize(id, hv, qid)
         @id = id
         @qid = qid # quantization_idx
@@ -69,6 +71,7 @@ module ZIMG
       end
 
       def to_enum(width, height)
+        # puts "[d] #{width}x#{height} scale: #{scale_x}x#{scale_y}"
         Enumerator.new do |e|
           y = 0
           height.times do
@@ -88,9 +91,10 @@ module ZIMG
       end
 
       def _decode
+        workspace =    [0] * (DCTSIZE**2) # Int32
+        result    = "\x00" * (DCTSIZE**2) # Uint8
+
         samples_per_line = blocks_per_line << 3
-        ri = [0] * 64 # Int32
-        rb = "\x00" * 64 # Uint8
         lines = []
         blocks_per_column.times do |block_row|
           scanline = block_row << 3
@@ -98,14 +102,22 @@ module ZIMG
             lines.push("\x00" * samples_per_line)
           end
           blocks_per_line.times do |block_col|
-            quantize_and_inverse(blocks[block_row][block_col], rb, ri)
+            # puts "[d] block: row=#{block_row} col=#{block_col}"
+            # quantize_and_inverse(blocks[block_row][block_col], result, workspace)
+            jpeg_idct_islow(blocks[block_row][block_col], result, workspace)
+
+            #            printf("[d] out:")
+            #            64.times do |i|
+            #              printf("%02x ", result[i].ord) if i%8 == 3
+            #            end
+            #            printf("\n")
 
             offset = 0
             sample = block_col << 3
             8.times do |j|
               line = lines[scanline + j]
               8.times do |i|
-                line[sample + i] = rb[offset]
+                line[sample + i] = result[offset]
                 offset += 1
               end
             end
@@ -127,13 +139,15 @@ module ZIMG
       # Christoph Loeffler, Adriaan Ligtenberg, George S. Moschytz,
       # "Practical Fast 1-D DCT Algorithms with 11 Multiplications",
       # IEEE Intl. Conf. on Acoustics, Speech & Signal Processing, 1989, 988-991.
-      def quantize_and_inverse(zz, data_out, data_in)
+      def quantize_and_inverse(data_in, data_out, workspace)
         v0 = v1 = v2 = v3 = v4 = v5 = v6 = v7 = t = 0
-        p = data_in
+        p = workspace
+
+        # printf "[d] data_in[0] = %d\n", data_in[0]
 
         # dequant
         64.times do |i|
-          p[i] = zz[i] * qtable[i]
+          p[i] = data_in[i] * qtable[i]
         end
 
         # inverse DCT on rows
@@ -145,6 +159,7 @@ module ZIMG
              p[4 + row] == 0 && p[5 + row] == 0 && p[6 + row] == 0 &&
              p[7 + row] == 0
             t = (DCT_SQRT_2 * p[0 + row] + 512) >> 10
+            # printf "[d] t = %d, p:%d, qtable:%d\n", t, p[0+row], qtable[0]
             p[0 + row] = t
             p[1 + row] = t
             p[2 + row] = t
@@ -213,7 +228,7 @@ module ZIMG
           if p[1 * 8 + col] == 0 && p[2 * 8 + col] == 0 && p[3 * 8 + col] == 0 &&
              p[4 * 8 + col] == 0 && p[5 * 8 + col] == 0 && p[6 * 8 + col] == 0 &&
              p[7 * 8 + col] == 0
-            t = (DCT_SQRT_2 * data_in[i + 0] + 8192) >> 14
+            t = (DCT_SQRT_2 * workspace[i + 0] + 8192) >> 14
             p[0 * 8 + col] = t
             p[1 * 8 + col] = t
             p[2 * 8 + col] = t
@@ -277,6 +292,7 @@ module ZIMG
         # convert to 8-bit integers
         64.times do |i|
           sample = 128 + ((p[i] + 8) >> 4)
+          # printf "%4d", sample
           data_out.setbyte(i, (if sample < 0
                                  0
                                else
