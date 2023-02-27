@@ -145,6 +145,7 @@ module ZIMG
     def info
       puts "[.] image size #{@img.width || "?"}x#{@img.height || "?"}, #{@img.bpp || "?"}bpp"
       puts "[.] palette = #{@img.palette}" if @img.palette
+      puts "[.] colorspace = #{@img.colorspace}" if @img.respond_to?(:colorspace)
       return unless @options[:verbose] > 0
 
       if @img.respond_to?(:imagedata)

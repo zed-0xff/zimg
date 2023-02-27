@@ -29,6 +29,8 @@ module ZIMG
       63
     ].freeze
 
+    attr_accessor :colorspace
+
     def read_jpeg(io)
       until io.eof?
         marker = io.read(2)
@@ -68,6 +70,11 @@ module ZIMG
           @chunks << Chunk.new(marker, io)
         end
       end
+      @colorspace = Colorspace.detect(
+        components: @sof.components,
+        adobe: @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::Adobe) }&.tag,
+        jfif: @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::JFIF) }&.tag,
+      )
     end
 
     def clamp8bit(x)
@@ -158,70 +165,6 @@ module ZIMG
       dst
     end
 
-    def components2imagedata(color_transform: nil)
-      enums = components.map { |c| c.to_enum(width, height) }
-      result = "\x00" * width * height * components.size
-      pos = -1
-      nc = components.size
-      case nc
-      when 1
-        # grayscale
-        enums[0].each do |g|
-          result.setbyte(pos += 1, g)
-        end
-      when 2
-        # ??
-        raise "TBD"
-      when 3
-        # RGB, default color_transform = true
-        color_transform = true if color_transform.nil?
-        if color_transform
-          enums[0].zip(*enums[1..]) do |y, cb, cr|
-            r = clamp8bit(y + 1.402 * (cr - 128))
-            g = clamp8bit(y - 0.3441363 * (cb - 128) - 0.71413636 * (cr - 128))
-            b = clamp8bit(y + 1.772 * (cb - 128))
-            result.setbyte(pos += 1, r)
-            result.setbyte(pos += 1, g)
-            result.setbyte(pos += 1, b)
-          end
-        else
-          enums[0].zip(*enums[1..]) do |r, g, b|
-            result.setbyte(pos += 1, r)
-            result.setbyte(pos += 1, g)
-            result.setbyte(pos += 1, b)
-          end
-        end
-      when 4
-        # CMYK, default color_transform = false
-        if color_transform.nil?
-          app14 = @chunks.find { |c| c.is_a?(APP) && c.tag.is_a?(APP::Adobe) }
-          # get from APP14 "Adobe" tag
-          color_transform = true if app14.tag.color_transform.to_i > 0
-        end
-        if color_transform
-          enums[0].zip(*enums[1..]) do |y, cb, cr, k|
-            c = clamp8bit(y + 1.402 * (cr - 128))
-            m = clamp8bit(y - 0.3441363 * (cb - 128) - 0.71413636 * (cr - 128))
-            y = clamp8bit(y + 1.772 * (cb - 128))
-            result.setbyte(pos += 1, c)
-            result.setbyte(pos += 1, m)
-            result.setbyte(pos += 1, y)
-            result.setbyte(pos += 1, 255 - k)
-          end
-        else
-          enums[0].zip(*enums[1..]) do |c, m, y, k|
-            result.setbyte(pos += 1, 255 - c)
-            result.setbyte(pos += 1, 255 - m)
-            result.setbyte(pos += 1, 255 - y)
-            result.setbyte(pos += 1, 255 - k)
-          end
-        end
-      else
-        raise "unexpected number of components: #{nc}"
-      end
-      result
-    end
-
     def components
       @components ||= _decode_components
     end
@@ -275,6 +218,7 @@ module ZIMG
 end
 
 require_relative "jpeg/chunks"
+require_relative "jpeg/colorspace"
 require_relative "jpeg/decoder"
 require_relative "jpeg/huffman"
 require_relative "jpeg/lossless"

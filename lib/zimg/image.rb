@@ -111,7 +111,7 @@ module ZIMG
 
     def inspect
       info =
-        %w[format width height bpp chunks scanlines].map do |k|
+        %w[format width height bpp colorspace chunks scanlines].map do |k|
           next unless respond_to?(k)
 
           v = case (v = send(k))
