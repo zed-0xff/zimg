@@ -176,9 +176,10 @@ module ZIMG
         r = "\x00" * 3 * width * height
         i = -1
         each_pixel do |p|
-          r.setbyte(i += 1, p.r)
-          r.setbyte(i += 1, p.g)
-          r.setbyte(i += 1, p.b)
+          c = p.to_depth(8)
+          r.setbyte(i += 1, c.r)
+          r.setbyte(i += 1, c.g)
+          r.setbyte(i += 1, c.b)
         end
         r
       end
