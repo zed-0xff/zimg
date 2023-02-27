@@ -176,7 +176,8 @@ module ZIMG
     end
 
     def inspect
-      s = "#<Color"
+      s = String.new
+      s << "#<Color"
       if depth == 16
         s << " r=#{r ? format("%04x", r) : "????"}"
         s << " g=#{g ? format("%04x", g) : "????"}"
