@@ -321,5 +321,24 @@ module ZIMG
         #        end
       end
     end
+
+    def console
+      ARGV.clear # clear ARGV so IRB is not confused
+      require "irb"
+      m0 = IRB.method(:setup)
+      img = @img
+
+      # override IRB.setup, called from IRB.start
+      IRB.define_singleton_method :setup do |*args|
+        m0.call(*args)
+        conf[:IRB_RC] = proc do |context|
+          context.main.instance_variable_set "@img", img
+          context.main.define_singleton_method(:img) { @img }
+        end
+      end
+
+      puts "[.] img = ZPNG::Image.load(#{@fname.inspect})".gray
+      IRB.start
+    end
   end
 end
