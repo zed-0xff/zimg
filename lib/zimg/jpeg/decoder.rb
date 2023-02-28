@@ -1,7 +1,5 @@
 # -*- coding:binary; frozen_string_literal: true -*-
 
-# based on https://github.com/jpeg-js/jpeg-js
-
 module ZIMG
   module JPEG
     class Frame
@@ -102,16 +100,8 @@ module ZIMG
             lines.push("\x00" * samples_per_line)
           end
           blocks_per_line.times do |block_col|
-            # puts "[d] block: row=#{block_row} col=#{block_col}"
             # quantize_and_inverse(blocks[block_row][block_col], result, workspace)
             jpeg_idct_islow(blocks[block_row][block_col], result, workspace)
-
-            #            printf("[d] out:")
-            #            64.times do |i|
-            #              printf("%02x ", result[i].ord) if i%8 == 3
-            #            end
-            #            printf("\n")
-
             offset = 0
             sample = block_col << 3
             8.times do |j|
@@ -445,7 +435,6 @@ module ZIMG
               mcu += 1
             end
           else
-            # printf "[d] offset=%6d here\n", @offset
             @reset_interval.times do
               @components.each do |c|
                 c.v.times do |j|
@@ -459,10 +448,8 @@ module ZIMG
               # If we've reached our expected MCU's, stop decoding
               break if mcu == mcu_expected
             end
-            # printf "[d] offset=%6d here2\n", @offset
           end
 
-          # printf "[d] offset=%6d here_end\n", @offset
           if mcu == mcu_expected
             # Skip trailing bytes at the end of the scan - until we reach the next marker
             printf "[?] %d extra bytes at end of scan\n".yellow, @bit_io.bytes_left if @bit_io.bytes_left > 0
