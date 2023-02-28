@@ -98,7 +98,7 @@ module ZIMG
                   when 1..15
                     @bit_io.receive_extend(value)
                   when 16
-                    32_768
+                    32768
                   else
                     raise "invalid DC difference magnitude category"
                   end

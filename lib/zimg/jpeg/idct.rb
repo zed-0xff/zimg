@@ -3,7 +3,6 @@
 module ZIMG
   module JPEG
     module IDCT
-      # rubocop:disable Style/NumericLiterals
       FIX_0_298631336 =  2446 # FIX(0.298631336)
       FIX_0_390180644 =  3196 # FIX(0.390180644)
       FIX_0_541196100 =  4433 # FIX(0.541196100)
@@ -16,7 +15,6 @@ module ZIMG
       FIX_2_053119869 = 16819 # FIX(2.053119869)
       FIX_2_562915447 = 20995 # FIX(2.562915447)
       FIX_3_072711026 = 25172 # FIX(3.072711026)
-      # rubocop:enable Style/NumericLiterals
 
       DCTSIZE       = 8
       CONST_BITS    = 13

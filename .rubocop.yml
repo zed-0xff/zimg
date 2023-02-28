@@ -40,6 +40,7 @@ Style/Documentation:          { Enabled: false }
 Style/FormatStringToken:      { Enabled: false }
 Style/MinMaxComparison:       { Enabled: false }
 Style/NegatedIfElseCondition: { Enabled: false }
+Style/NumericLiterals:        { Enabled: false }
 Style/NumericPredicate:       { Enabled: false }
 Style/ParallelAssignment:     { Enabled: false }
 Style/StringLiterals:         { EnforcedStyle: double_quotes }
