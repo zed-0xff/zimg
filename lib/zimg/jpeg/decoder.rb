@@ -44,7 +44,7 @@ module ZIMG
       end
 
       def inspect
-        format("<%d %d %d %d>", id, h, v, qid)
+        format("<%d %dx%d %d>", id, h, v, qid)
       end
 
       def prepare(frame, qtables)
@@ -69,7 +69,8 @@ module ZIMG
       end
 
       def to_enum(width, height)
-        # puts "[d] #{width}x#{height} scale: #{scale_x}x#{scale_y}"
+        return h2v2_fancy_upsample(width, height) if @scale_x == 0.5 && @scale_y == 0.5
+
         Enumerator.new do |e|
           y = 0
           height.times do
@@ -84,212 +85,83 @@ module ZIMG
         end
       end
 
-      def decoded_lines
-        @decoded_lines ||= _decode
+      # from libjpeg-turbo
+      def h2v2_fancy_upsample(width, height)
+        Enumerator.new do |e|
+          dw22 = width / 2 - 2
+          (height / 2).times do |y|
+            2.times do |v|
+              line0 = decoded_lines[y]
+              line1 =
+                if v == 0
+                  # next nearest is row above
+                  decoded_lines[y == 0 ? 0 : (y - 1)]
+                else
+                  # next nearest is row below
+                  decoded_lines[y + 1] || decoded_lines[y]
+                end
+
+              # printf("[d] inptr0: %02x %02x %02x %02x", line0.getbyte(0), line0.getbyte(1), line0.getbyte(2), line0.getbyte(3))
+              # printf(" inptr1: %02x %02x %02x %02x", line1.getbyte(0), line1.getbyte(1), line1.getbyte(2), line1.getbyte(3))
+              # printf(" outrow: %d v: %d\n", 0, v)
+
+              inptr0 = -1
+              inptr1 = -1
+              thiscolsum = line0.getbyte(inptr0 += 1) * 3 + line1.getbyte(inptr1 += 1)
+              nextcolsum = line0.getbyte(inptr0 += 1) * 3 + line1.getbyte(inptr1 += 1)
+              e << ((thiscolsum * 4 + 8) >> 4)
+              e << ((thiscolsum * 3 + nextcolsum + 7) >> 4)
+              lastcolsum = thiscolsum
+              thiscolsum = nextcolsum
+
+              dw22.times do
+                nextcolsum = line0.getbyte(inptr0 += 1) * 3 + line1.getbyte(inptr1 += 1)
+                e << ((thiscolsum * 3 + lastcolsum + 8) >> 4)
+                e << ((thiscolsum * 3 + nextcolsum + 7) >> 4)
+                lastcolsum = thiscolsum
+                thiscolsum = nextcolsum
+              end
+
+              # Special case for last column
+              e << ((thiscolsum * 3 + lastcolsum + 8) >> 4)
+              e << ((thiscolsum * 4 + 7) >> 4)
+            end
+          end
+        end
       end
 
-      def _decode
-        workspace =    [0] * (DCTSIZE**2) # Int32
-        result    = "\x00" * (DCTSIZE**2) # Uint8
+      def get_scaled(x, y)
+        decoded_lines[y * @scale_y].getbyte(x * @scale_x)
+      end
 
-        samples_per_line = blocks_per_line << 3
+      def decoded_lines
+        @decoded_lines ||= _decode(8, 8)
+      end
+
+      def _decode(w, h)
+        workspace =    [0] * (w * h) # Int32
+        result    = "\x00" * (w * h) # Uint8
+        method    = "jpeg_idct_#{w}x#{h}".to_sym
+
+        samples_per_line = blocks_per_line * w
         lines = []
         blocks_per_column.times do |block_row|
-          scanline = block_row << 3
-          8.times do
+          scanline = block_row * w
+          h.times do
             lines.push("\x00" * samples_per_line)
           end
           blocks_per_line.times do |block_col|
-            # quantize_and_inverse(blocks[block_row][block_col], result, workspace)
-            jpeg_idct_islow(blocks[block_row][block_col], result, workspace)
+            send(method, blocks[block_row][block_col], result, workspace)
             offset = 0
-            sample = block_col << 3
-            8.times do |j|
+            sample = block_col * w
+            h.times do |j|
               line = lines[scanline + j]
-              8.times do |i|
-                line[sample + i] = result[offset]
-                offset += 1
-              end
+              line[sample, w] = result[offset, w]
+              offset += w
             end
           end
         end
         lines
-      end
-
-      DCT_COS_1    = 4017  # cos(pi/16)
-      DCT_SIN_1    = 799   # sin(pi/16)
-      DCT_COS_3    = 3406  # cos(3*pi/16)
-      DCT_SIN_3    = 2276  # sin(3*pi/16)
-      DCT_COS_6    = 1567  # cos(6*pi/16)
-      DCT_SIN_6    = 3784  # sin(6*pi/16)
-      DCT_SQRT_2   = 5793  # sqrt(2)
-      DCT_SQRT_2D2 = 2896  # sqrt(2) / 2
-
-      # A port of poppler's IDCT method which in turn is taken from:
-      # Christoph Loeffler, Adriaan Ligtenberg, George S. Moschytz,
-      # "Practical Fast 1-D DCT Algorithms with 11 Multiplications",
-      # IEEE Intl. Conf. on Acoustics, Speech & Signal Processing, 1989, 988-991.
-      def quantize_and_inverse(data_in, data_out, workspace)
-        v0 = v1 = v2 = v3 = v4 = v5 = v6 = v7 = t = 0
-        p = workspace
-
-        # printf "[d] data_in[0] = %d\n", data_in[0]
-
-        # dequant
-        64.times do |i|
-          p[i] = data_in[i] * qtable[i]
-        end
-
-        # inverse DCT on rows
-        8.times do |i|
-          row = 8 * i
-
-          # check for all-zero AC coefficients
-          if p[1 + row] == 0 && p[2 + row] == 0 && p[3 + row] == 0 &&
-             p[4 + row] == 0 && p[5 + row] == 0 && p[6 + row] == 0 &&
-             p[7 + row] == 0
-            t = (DCT_SQRT_2 * p[0 + row] + 512) >> 10
-            # printf "[d] t = %d, p:%d, qtable:%d\n", t, p[0+row], qtable[0]
-            p[0 + row] = t
-            p[1 + row] = t
-            p[2 + row] = t
-            p[3 + row] = t
-            p[4 + row] = t
-            p[5 + row] = t
-            p[6 + row] = t
-            p[7 + row] = t
-            next
-          end
-
-          # stage 4
-          v0 = (DCT_SQRT_2 * p[0 + row] + 128) >> 8
-          v1 = (DCT_SQRT_2 * p[4 + row] + 128) >> 8
-          v4 = (DCT_SQRT_2D2 * (p[1 + row] - p[7 + row]) + 128) >> 8
-          v7 = (DCT_SQRT_2D2 * (p[1 + row] + p[7 + row]) + 128) >> 8
-          v2 = p[2 + row]
-          v5 = p[3 + row] << 4
-          v6 = p[5 + row] << 4
-          v3 = p[6 + row]
-
-          # stage 3
-          t = (v0 - v1 + 1) >> 1
-          v0 = (v0 + v1 + 1) >> 1
-          v1 = t
-          t = (v2 * DCT_SIN_6 + v3 * DCT_COS_6 + 128) >> 8
-          v2 = (v2 * DCT_COS_6 - v3 * DCT_SIN_6 + 128) >> 8
-          v3 = t
-          t = (v4 - v6 + 1) >> 1
-          v4 = (v4 + v6 + 1) >> 1
-          v6 = t
-          t = (v7 + v5 + 1) >> 1
-          v5 = (v7 - v5 + 1) >> 1
-          v7 = t
-
-          # stage 2
-          t = (v0 - v3 + 1) >> 1
-          v0 = (v0 + v3 + 1) >> 1
-          v3 = t
-          t = (v1 - v2 + 1) >> 1
-          v1 = (v1 + v2 + 1) >> 1
-          v2 = t
-          t = (v4 * DCT_SIN_3 + v7 * DCT_COS_3 + 2048) >> 12
-          v4 = (v4 * DCT_COS_3 - v7 * DCT_SIN_3 + 2048) >> 12
-          v7 = t
-          t = (v5 * DCT_SIN_1 + v6 * DCT_COS_1 + 2048) >> 12
-          v5 = (v5 * DCT_COS_1 - v6 * DCT_SIN_1 + 2048) >> 12
-          v6 = t
-
-          # stage 1
-          p[0 + row] = v0 + v7
-          p[1 + row] = v1 + v6
-          p[2 + row] = v2 + v5
-          p[3 + row] = v3 + v4
-          p[4 + row] = v3 - v4
-          p[5 + row] = v2 - v5
-          p[6 + row] = v1 - v6
-          p[7 + row] = v0 - v7
-        end
-
-        # inverse DCT on columns
-        8.times do |i|
-          col = i
-
-          # check for all-zero AC coefficients
-          if p[1 * 8 + col] == 0 && p[2 * 8 + col] == 0 && p[3 * 8 + col] == 0 &&
-             p[4 * 8 + col] == 0 && p[5 * 8 + col] == 0 && p[6 * 8 + col] == 0 &&
-             p[7 * 8 + col] == 0
-            t = (DCT_SQRT_2 * workspace[i + 0] + 8192) >> 14
-            p[0 * 8 + col] = t
-            p[1 * 8 + col] = t
-            p[2 * 8 + col] = t
-            p[3 * 8 + col] = t
-            p[4 * 8 + col] = t
-            p[5 * 8 + col] = t
-            p[6 * 8 + col] = t
-            p[7 * 8 + col] = t
-            next
-          end
-
-          # stage 4
-          v0 = (DCT_SQRT_2 * p[0 * 8 + col] + 2048) >> 12
-          v1 = (DCT_SQRT_2 * p[4 * 8 + col] + 2048) >> 12
-          v4 = (DCT_SQRT_2D2 * (p[1 * 8 + col] - p[7 * 8 + col]) + 2048) >> 12
-          v7 = (DCT_SQRT_2D2 * (p[1 * 8 + col] + p[7 * 8 + col]) + 2048) >> 12
-          v2 = p[2 * 8 + col]
-          v5 = p[3 * 8 + col]
-          v6 = p[5 * 8 + col]
-          v3 = p[6 * 8 + col]
-
-          # stage 3
-          t = (v0 - v1 + 1) >> 1
-          v0 = (v0 + v1 + 1) >> 1
-          v1 = t
-          t = (v2 * DCT_SIN_6 + v3 * DCT_COS_6 + 2048) >> 12
-          v2 = (v2 * DCT_COS_6 - v3 * DCT_SIN_6 + 2048) >> 12
-          v3 = t
-          t = (v4 - v6 + 1) >> 1
-          v4 = (v4 + v6 + 1) >> 1
-          v6 = t
-          t = (v7 + v5 + 1) >> 1
-          v5 = (v7 - v5 + 1) >> 1
-          v7 = t
-
-          # stage 2
-          t = (v0 - v3 + 1) >> 1
-          v0 = (v0 + v3 + 1) >> 1
-          v3 = t
-          t = (v1 - v2 + 1) >> 1
-          v1 = (v1 + v2 + 1) >> 1
-          v2 = t
-          t = (v4 * DCT_SIN_3 + v7 * DCT_COS_3 + 2048) >> 12
-          v4 = (v4 * DCT_COS_3 - v7 * DCT_SIN_3 + 2048) >> 12
-          v7 = t
-          t = (v5 * DCT_SIN_1 + v6 * DCT_COS_1 + 2048) >> 12
-          v5 = (v5 * DCT_COS_1 - v6 * DCT_SIN_1 + 2048) >> 12
-          v6 = t
-
-          # stage 1
-          p[0 * 8 + col] = v0 + v7
-          p[1 * 8 + col] = v1 + v6
-          p[2 * 8 + col] = v2 + v5
-          p[3 * 8 + col] = v3 + v4
-          p[4 * 8 + col] = v3 - v4
-          p[5 * 8 + col] = v2 - v5
-          p[6 * 8 + col] = v1 - v6
-          p[7 * 8 + col] = v0 - v7
-        end
-
-        # convert to 8-bit integers
-        64.times do |i|
-          sample = 128 + ((p[i] + 8) >> 4)
-          # printf "%4d", sample
-          data_out.setbyte(i, (if sample < 0
-                                 0
-                               else
-                                 (sample > 0xFF ? 0xFF : sample)
-                               end))
-        end
-        data_out
       end
     end
 

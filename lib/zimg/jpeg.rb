@@ -72,7 +72,7 @@ module ZIMG
       end
 
       @colorspace =
-        if lossless? && @sof.components.map(&:id) == [0,1,2]
+        if lossless? && @sof.components.map(&:id) == [0, 1, 2]
           Colorspace::RGB
         else
           Colorspace.detect(
