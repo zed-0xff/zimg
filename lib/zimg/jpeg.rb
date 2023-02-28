@@ -77,6 +77,10 @@ module ZIMG
       )
     end
 
+    def scanlines
+      @scanlines ||= height.times.map { |i| Scanline.new(self, i) }
+    end
+
     def clamp8bit(x)
       if x < 0
         0
@@ -194,5 +198,6 @@ require_relative "jpeg/idct"
 require_relative "jpeg/decoder"
 require_relative "jpeg/huffman"
 require_relative "jpeg/lossless"
+require_relative "jpeg/scanline"
 
 ZIMG.register_format! :jpeg
