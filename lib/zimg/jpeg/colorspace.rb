@@ -223,13 +223,14 @@ module ZIMG
       end
 
       class RGB < Colorspace
-        pos = -1
         def self.to_rgb(enums, result)
+          pos = -1
           enums[0].zip(*enums[1..]) do |r, g, b|
             result.setbyte(pos += 1, r)
             result.setbyte(pos += 1, g)
             result.setbyte(pos += 1, b)
           end
+          result
         end
       end
 
