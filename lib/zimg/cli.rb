@@ -284,6 +284,7 @@ module ZIMG
 
     def compare(other_fname)
       images = [@img, load_file(other_fname)]
+      images.reverse! if @argv.index(@fname) > @argv.index(other_fname)
 
       # limit = 100
       alpha_used = images.any?(&:alpha_used?)

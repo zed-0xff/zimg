@@ -71,6 +71,10 @@ module ZIMG
         quantptr = 0
         wsptr = 0
 
+        #        @islow ||= 0
+        #        puts "[d] islow #@islow"
+        #        @islow += 1
+
         #        printf("[d] in: ")
         #        64.times do |i|
         #            printf("%d ", data_in[i])

@@ -43,10 +43,12 @@ module ZIMG
           @chunks << DAC.new(marker, io)
         when 0xc0..0xcf
           @chunks << (chunk = SOF.new(marker, io))
-          @width = chunk.width
-          @height = chunk.height
-          @bpp = chunk.bpp
-          @sof = chunk
+          unless @sof
+            @sof = chunk
+            @width = chunk.width
+            @height = chunk.height
+            @bpp = chunk.bpp
+          end
         when 0xda
           @chunks << (sos = SOS.new(marker, io))
           # Entropy-Coded Segment starts

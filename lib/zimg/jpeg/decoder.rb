@@ -3,21 +3,21 @@
 module ZIMG
   module JPEG
     class Frame
-      attr_accessor :progressive, :scanlines, :samples_per_line, :components
+      attr_accessor :progressive, :height, :width, :components
       attr_reader :max_h, :max_v, :mcus_per_line, :mcus_per_column
 
       def initialize(sof, qtables)
-        @progressive      = sof.progressive?
-        @scanlines        = sof.height
-        @samples_per_line = sof.width
-        @components       = sof.components
+        @width       = sof.width
+        @height      = sof.height
+        @progressive = sof.progressive?
+        @components  = sof.components
 
         # According to the JPEG standard, the sampling factor must be between 1 and 4
         # See https://github.com/libjpeg-turbo/libjpeg-turbo/blob/9abeff46d87bd201a952e276f3e4339556a403a3/libjpeg.txt#L1138-L1146
         @max_h = components.map(&:h).max
         @max_v = components.map(&:v).max
-        @mcus_per_line = (samples_per_line / 8.0 / max_h).ceil
-        @mcus_per_column = (scanlines / 8.0 / max_v).ceil
+        @mcus_per_line = (width / 8.0 / max_h).ceil
+        @mcus_per_column = (height / 8.0 / max_v).ceil
 
         components.each do |c|
           c.prepare(self, qtables)
@@ -48,8 +48,10 @@ module ZIMG
       end
 
       def prepare(frame, qtables)
-        @blocks_per_line          = ((frame.samples_per_line / 8.0).ceil * 1.0 * h / frame.max_h).ceil
-        @blocks_per_column        = ((frame.scanlines / 8.0).ceil * 1.0 * v / frame.max_v).ceil
+        @downsampled_width        = (1.0 * frame.width * h / frame.max_h).ceil
+        @downsampled_height       = (1.0 * frame.height * v / frame.max_v).ceil
+        @blocks_per_line          = ((frame.width / 8.0).ceil * 1.0 * h / frame.max_h).ceil
+        @blocks_per_column        = ((frame.height / 8.0).ceil * 1.0 * v / frame.max_v).ceil
         blocks_per_line_for_mcu   = frame.mcus_per_line * h
         blocks_per_column_for_mcu = frame.mcus_per_column * v
 
@@ -86,11 +88,12 @@ module ZIMG
       end
 
       # from libjpeg-turbo
-      def h2v2_fancy_upsample(width, height)
+      def h2v2_fancy_upsample(width, _height)
+        row = [0] * @downsampled_width * 2
         Enumerator.new do |e|
-          dw22 = width / 2 - 2
-          (height / 2).times do |y|
+          @downsampled_height.times do |y|
             2.times do |v|
+              o = -1
               line0 = decoded_lines[y]
               line1 =
                 if v == 0
@@ -101,30 +104,29 @@ module ZIMG
                   decoded_lines[y + 1] || decoded_lines[y]
                 end
 
-              # printf("[d] inptr0: %02x %02x %02x %02x", line0.getbyte(0), line0.getbyte(1), line0.getbyte(2), line0.getbyte(3))
-              # printf(" inptr1: %02x %02x %02x %02x", line1.getbyte(0), line1.getbyte(1), line1.getbyte(2), line1.getbyte(3))
-              # printf(" outrow: %d v: %d\n", 0, v)
-
-              inptr0 = -1
-              inptr1 = -1
-              thiscolsum = line0.getbyte(inptr0 += 1) * 3 + line1.getbyte(inptr1 += 1)
-              nextcolsum = line0.getbyte(inptr0 += 1) * 3 + line1.getbyte(inptr1 += 1)
-              e << ((thiscolsum * 4 + 8) >> 4)
-              e << ((thiscolsum * 3 + nextcolsum + 7) >> 4)
+              thiscolsum = line0.getbyte(0) * 3 + line1.getbyte(0)
+              nextcolsum = line0.getbyte(1) * 3 + line1.getbyte(1)
+              row[o += 1] = ((thiscolsum * 4 + 8) >> 4)
+              row[o += 1] = ((thiscolsum * 3 + nextcolsum + 7) >> 4)
               lastcolsum = thiscolsum
               thiscolsum = nextcolsum
 
-              dw22.times do
-                nextcolsum = line0.getbyte(inptr0 += 1) * 3 + line1.getbyte(inptr1 += 1)
-                e << ((thiscolsum * 3 + lastcolsum + 8) >> 4)
-                e << ((thiscolsum * 3 + nextcolsum + 7) >> 4)
+              2.upto(@downsampled_width - 1) do |x|
+                nextcolsum = line0.getbyte(x) * 3 + line1.getbyte(x)
+                row[o += 1] = ((thiscolsum * 3 + lastcolsum + 8) >> 4)
+                row[o += 1] = ((thiscolsum * 3 + nextcolsum + 7) >> 4)
                 lastcolsum = thiscolsum
                 thiscolsum = nextcolsum
               end
 
               # Special case for last column
-              e << ((thiscolsum * 3 + lastcolsum + 8) >> 4)
-              e << ((thiscolsum * 4 + 7) >> 4)
+              row[o += 1] = ((thiscolsum * 3 + lastcolsum + 8) >> 4)
+              row[o += 1] = ((thiscolsum * 4 + 7) >> 4)
+
+              # maybe yield entire row?
+              width.times do |o|
+                e << row[o]
+              end
             end
           end
         end

@@ -4,14 +4,14 @@ module ZIMG
   module JPEG
     module Lossless
       class Frame
-        attr_accessor :progressive, :scanlines, :samples_per_line, :components
+        attr_accessor :progressive, :components
         attr_reader :max_h, :max_v, :mcus_per_line, :mcus_per_column, :width, :height, :precision
 
         def initialize(sof)
-          @precision        = sof.bpp
-          @scanlines        = @height = sof.height
-          @samples_per_line = @width = sof.width
-          @components       = sof.components
+          @width      = sof.width
+          @height     = sof.height
+          @precision  = sof.bpp
+          @components = sof.components
 
           components.each do |c|
             c.prepare(self)

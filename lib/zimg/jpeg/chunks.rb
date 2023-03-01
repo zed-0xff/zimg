@@ -10,7 +10,7 @@ module ZIMG
       def initialize(marker, io)
         @marker = marker
         @size = io.read(2).unpack1("n")
-        @data = io.read(@size - 2)
+        @data = io.read(@size - 2) if @size > 2
       end
 
       def type
@@ -91,10 +91,10 @@ module ZIMG
       def initialize(marker, io)
         super
         @id = marker[1].ord & 0xf
-        @bpp, @height, @width, @ncomp = @data.unpack("CnnC")
+        @bpp, @height, @width, @ncomp = @data&.unpack("CnnC")
         @components = []
         component_class = lossless? ? Lossless::Component : Component
-        @ncomp.times do |i|
+        @ncomp&.times do |i|
           id, hv, qid = @data[6 + i * 3, 3].unpack("CCC")
           @components << component_class.new(id, hv, qid)
         end
@@ -152,7 +152,7 @@ module ZIMG
       def inspect *_params
         super.chop +
           attributes.join(" ") +
-          format(" bpp=%d width=%d height=%d ncomp=%d ", bpp, width, height, ncomp) +
+          format(" bpp=%s width=%s height=%s ncomp=%s ", bpp, width, height, ncomp) +
           format("components=%s >", components.inspect)
       end
     end
