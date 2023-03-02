@@ -229,9 +229,9 @@ module ZIMG
         def self.to_rgb(enums, result)
           pos = -1
           enums[0].zip(*enums[1..]) do |c, m, y, k|
-            r = (c * k / MAXJSAMPLE).to_i
-            g = (m * k / MAXJSAMPLE).to_i
-            b = (y * k / MAXJSAMPLE).to_i
+            r = (c * k / MAXJSAMPLE).round
+            g = (m * k / MAXJSAMPLE).round
+            b = (y * k / MAXJSAMPLE).round
 
             result.setbyte(pos += 1, r)
             result.setbyte(pos += 1, g)
