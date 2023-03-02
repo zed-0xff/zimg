@@ -205,7 +205,7 @@ module ZIMG
         r = 0
         length.times do
           bit = @bio.next
-          return unless bit
+          # return unless bit
 
           r = (r << 1) | bit
         end
@@ -246,7 +246,8 @@ module ZIMG
             e << ((b >> 1) & 1)
             e << (b & 1)
           end
-          e << nil # EOF
+          # will raise StopIteration if try to read behind at this point
+          # e << nil # EOF
         end
       end
     end
@@ -347,10 +348,12 @@ module ZIMG
         end # while
 
         @offset
+      rescue StopIteration
+        # catch unexpected end of data (partial_progressive.jpg, non-interleaved_progressive-*.jpg)
+        warn "[?] unexpected EOF"
       end
 
       def decode_mcu(component, decode_fn, mcu, row, col)
-        # puts "[d] decode_mcu(#{mcu}, #{row}, #{col})"
         mcu_row = mcu / @mcus_per_line
         mcu_col = mcu % @mcus_per_line
         block_row = mcu_row * component.v + row
@@ -475,10 +478,6 @@ module ZIMG
 
         @eobrun -= 1
         @successive_ac_state = 0 if @eobrun == 0
-      rescue NoMethodError => e
-        # catch unexpected end of data (partial_progressive.jpg)
-        raise unless e.to_s["undefined method `<<' for nil:NilClass"]
-        # TODO: show warning
       end
 
       def decode_dc0(component, dst)
