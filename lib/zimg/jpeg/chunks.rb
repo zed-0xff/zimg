@@ -249,7 +249,19 @@ module ZIMG
       end
     end
 
-    class DAC < Chunk; end
+    # Define Arithmetic Coding
+    class DAC < Chunk
+      attr_reader :values
+
+      def initialize(marker, io)
+        super
+        @values = @data.unpack("C*").each_slice(2).to_a
+      end
+
+      def inspect *args
+        super.chop + format("values=%s>", values.inspect)
+      end
+    end
 
     class COM < Chunk
       def inspect *args

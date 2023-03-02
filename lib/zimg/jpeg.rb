@@ -29,6 +29,8 @@ module ZIMG
       63
     ].freeze
 
+    NUM_ARITH_TBLS = 16 # from jpeglib.h
+
     attr_accessor :colorspace
 
     def read_jpeg(io)
@@ -187,6 +189,8 @@ module ZIMG
             end
           end
           sos = chunk
+          raise "TBD: Arithmetic Coding" if @sof.entropy_coding == :arithmetic
+
           components = sos.components.map do |idx, table_spec|
             comp = frame.components.find { |c| c.id == idx }
             comp.huffman_table_dc = huffman_tables_dc[table_spec >> 4]
