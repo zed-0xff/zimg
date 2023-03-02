@@ -17,6 +17,8 @@ each_sample("**/*.jpg") do |src_fname|
   RSpec.describe src_fname do
     it "matches #{dst_fname}" do
       skip("SLOW") if src_bname == "jpeg_lossless_sel1-rgb.jpg" && !ENV["SLOW"]
+      skip("SLOW") if src_bname == "large_image.jpg" && !ENV["SLOW"]
+      skip("SLOW") if src_bname == "black-6000x6000.jpg" && !ENV["SLOW"]
 
       dst = File.binread(dst_fname)
       src_img = ZIMG.load(src_fname)
@@ -36,7 +38,7 @@ each_sample("**/*.jpg") do |src_fname|
       expect(src.size).to eq(dst.size)
       if src != dst
         tmp_fname = "#{src_fname.sub(/.jpg$/, "")}.tmp.png"
-        File.binwrite(tmp_fname, src_img.to_png.export)
+        File.binwrite(tmp_fname, src_img.to_png.export) # FIXME: calls pixel processing 2nd time!
         raise "zimg --compare #{dst_fname} #{tmp_fname}"
       end
     end
