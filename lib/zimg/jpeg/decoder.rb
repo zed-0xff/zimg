@@ -101,7 +101,8 @@ module ZIMG
                   decoded_lines[y == 0 ? 0 : (y - 1)]
                 else
                   # next nearest is row below
-                  decoded_lines[y + 1] || decoded_lines[y]
+                  # there's actually can be more decoded_lines than downsampled_width
+                  decoded_lines[y == @downsampled_height - 1 ? y : (y + 1)]
                 end
 
               thiscolsum = line0.getbyte(0) * 3 + line1.getbyte(0)
