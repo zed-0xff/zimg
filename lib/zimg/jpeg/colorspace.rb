@@ -9,52 +9,52 @@ module ZIMG
         when 1
           Grayscale
         when 3
-          cids = components.map(&:id)
-          case cids
-          when [1, 2, 3]
-            YCbCr
-          when [0x01, 0x22, 0x23]
-            BG_YCC
-          when %w[R G B]
-            RGB
-          when %w[r g b]
-            BG_RGB
+          if jfif
+            YCbCr # JFIF implies YCbCr
+          elsif adobe
+            case adobe.color_transform
+            when 0
+              RGB
+            when 1
+              YCbCr
+            else
+              warn "[?] Unknown Adobe color transform code #{adobe.color_transform}"
+              YCbCr
+            end
           else
-            if jfif
-              YCbCr # assume it's YCbCr
-            elsif adobe
-              case adobe.color_transform
-              when 0
-                RGB
-              when 1
-                YCbCr
-              else
-                warn "[?] Unknown Adobe color transform code #{adobe.color_transform}"
-                YCbCr
-              end
+            cids = components.map(&:id)
+            case cids
+            when [1, 2, 3]
+              YCbCr
+            when [0x01, 0x22, 0x23]
+              BG_YCC
+            when %w[R G B]
+              RGB
+            when %w[r g b]
+              BG_RGB
             else
               warn "[?] Unrecognized component IDs #{cids.inspect}, assuming YCbCr"
               YCbCr
             end
           end
         when 4
-          cids = components.map(&:id)
-          case cids
-          when [1, 2, 3, 4]
-            YCCK
-          when %w[C M Y K]
-            CMYK
+          if adobe
+            case adobe.color_transform
+            when 0
+              CMYK
+            when 2
+              YCCK
+            else
+              warn "[?] Unknown Adobe color transform code #{adobe.color_transform}"
+              YCCK
+            end
           else
-            if adobe
-              case adobe.color_transform
-              when 0
-                CMYK
-              when 2
-                YCCK
-              else
-                warn "[?] Unknown Adobe color transform code #{adobe.color_transform}"
-                YCCK
-              end
+            cids = components.map(&:id)
+            case cids
+            when [1, 2, 3, 4]
+              YCCK
+            when %w[C M Y K]
+              CMYK
             else
               # Unknown IDs and no special markers, assume straight CMYK.
               CMYK
