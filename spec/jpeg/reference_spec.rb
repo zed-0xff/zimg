@@ -1,6 +1,9 @@
 # -*- coding:binary; frozen_string_literal: true -*-
 
-each_sample("**/*.jpg") do |src_fname|
+require "digest/md5"
+
+processed = {}
+each_sample("**/*.jpg").sort_by(&:size).each do |src_fname|
   src_bname = File.basename(src_fname)
 
   next if src_fname["/fuzz"]
@@ -9,11 +12,15 @@ each_sample("**/*.jpg") do |src_fname|
   next if src_bname == "testorig12.jpg"     # convert: Unsupported JPEG data precision 12
   next if src_bname == "red-bad-marker.jpg" # convert: Unsupported marker type 0xb6
 
+  md5 = Digest::MD5.file(src_fname).to_s
+  next if processed[md5]
+
+  processed[md5] = true
+
   dst_fname = src_fname.sub(/\.(\w+)$/, ".im.png")
   system("convert", src_fname, dst_fname, exception: true) unless File.exist?(dst_fname)
 
   dst_format = "png"
-  dst_bname = File.basename(dst_fname)
   RSpec.describe src_fname do
     it "matches #{dst_fname}" do
       skip("SLOW") if src_bname == "jpeg_lossless_sel1-rgb.jpg" && !ENV["SLOW"]

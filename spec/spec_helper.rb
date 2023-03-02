@@ -22,8 +22,12 @@ def each_sample(glob)
   samples = Dir[File.join(SAMPLES_DIR, glob)]
   raise "[?] no samples for #{glob}" if samples.empty?
 
-  samples.each do |fname|
-    yield fname.sub("#{Dir.pwd}/", "")
+  if block_given?
+    samples.each do |fname|
+      yield fname.sub("#{Dir.pwd}/", "")
+    end
+  else
+    samples.map { |fname| fname.sub("#{Dir.pwd}/", "") }
   end
 end
 
