@@ -5,7 +5,7 @@ require "zimg/cli"
 RSpec.describe "CLI" do
   PNGSuite.each_good do |fname|
     describe fname.sub(%r{\A#{Regexp.escape(Dir.getwd)}/?}, "") do
-      it "works" do # rubocop:disable RSpec/ExampleWording
+      it "works" do
         expect { ZIMG::CLI.new([fname]).run }.to output(/IEND/).to_stdout
       end
 

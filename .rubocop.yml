@@ -32,8 +32,10 @@ Naming/MethodParameterName:   { Enabled: false }
 
 RSpec/DescribeClass:          { Enabled: false }
 RSpec/ExampleLength:          { Enabled: false }
+RSpec/ExampleWording:         { Enabled: false }
 RSpec/FilePath:               { Enabled: false }
 RSpec/MultipleExpectations:   { Enabled: false }
+RSpec/NestedGroups:           { Enabled: false }
 
 Style/CommentedKeyword:       { Enabled: false }
 Style/Documentation:          { Enabled: false }
