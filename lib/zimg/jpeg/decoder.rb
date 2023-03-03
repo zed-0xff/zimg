@@ -69,6 +69,8 @@ module ZIMG
 
         @scale_x = 1.0 * h / frame.max_h
         @scale_y = 1.0 * v / frame.max_v
+
+        # printf "[d] comp %d: blocks=%dx%d bpc=%d bpl=%d\n", @id, @blocks.size, @blocks[0].size, @blocks_per_column, @blocks_per_line
       end
 
       def to_enum(width, height)
@@ -78,6 +80,7 @@ module ZIMG
             return h2v1_fancy_upsample(width, height) if @scale_y == 1
           end
         elsif @scale_x == 1 && @scale_y == 0.5
+          # TODO: implement & test
           return h1v2_fancy_upsample(width, height)
         end
 
@@ -95,6 +98,7 @@ module ZIMG
         end
       end
 
+      # not upsampled but scaled
       def get_scaled(x, y)
         decoded_lines[y * @scale_y].getbyte(x * @scale_x)
       end
@@ -184,7 +188,6 @@ module ZIMG
       private
 
       def _create_enumerator(data, offset = 0)
-        # printf "[d] offset=%6d  _create_enumerator\n", offset
         Enumerator.new do |e|
           sio = StringIO.new(data)
           sio.seek(offset)
@@ -259,6 +262,8 @@ module ZIMG
           end
         @reset_interval ||= mcu_expected
 
+        # printf("[d] mcu=%d, mcu_expected=%d, reset_interval=%d, mpl=%d, mpc=%d\n", mcu, mcu_expected, @reset_interval, @mcus_per_line, @mcus_per_column);
+
         while mcu < mcu_expected
           @bit_io.reset!
 
@@ -275,8 +280,10 @@ module ZIMG
           else
             @reset_interval.times do
               @components.each do |c|
+                # printf("[d] decode_mcu %d c.id=%d c.v=%d c.h=%d\n", mcu, c.id, c.v, c.h)
                 c.v.times do |j|
                   c.h.times do |k|
+                    # printf("[d] decode_mcu %d cid=%d j=%d k=%d\n", mcu, c.id, j, k)
                     decode_mcu(c, decode_fn, mcu, j, k)
                   end
                 end
@@ -288,25 +295,43 @@ module ZIMG
             end
           end
 
-          if mcu == mcu_expected
+          if false # mcu == mcu_expected
             # Skip trailing bytes at the end of the scan - until we reach the next marker
-            printf "[?] %d extra bytes at end of scan\n".yellow, @bit_io.bytes_left if @bit_io.bytes_left > 0
+            no_ff_skip = 0
             while @bit_io.bytes_left > 0
-              break if @bit_io.peek_byte == "\xFF" && @bit_io.peek_byte(1) != "\x00"
+              if @bit_io.peek_byte == "\xFF"
+                break if @bit_io.peek_byte(1) != "\x00"
+              else
+                p @bit_io.peek_byte
+                no_ff_skip += 1
+              end
 
               @bit_io.skip_bytes(1)
             end
+            warn(format("[?] %d extra bytes at end of scan", no_ff_skip).yellow) if no_ff_skip > 0
           end
 
-          # find marker
-          marker = @bit_io.peek_bytes(2)
-          break if marker.nil? || marker.empty? # valid EOF
-          raise "got #{marker.inspect} instead of marker" if marker[0] != "\xFF"
-
-          break unless (0xd0..0xd7).include?(marker[1].ord) # RSTx
-
-          @bit_io.skip_bytes(2)
-
+          loop do
+            marker = @bit_io.peek_bytes(2)
+            case marker
+            when "\xFF\xD0".."\xFF\xD7"
+              # RSTx
+              @bit_io.skip_bytes(2)
+              break
+            when "\xFF\x00"
+              # stuffed 0
+              @bit_io.skip_bytes(2)
+            when "\xFF\xFF"
+              # maybe a series of FF's followed by 0
+              @bit_io.skip_bytes(1)
+            when nil, ""
+              # valid EOF?
+              return @offset
+            else
+              warn "[?] expected RSTx, but got #{marker.inspect}"
+              return @offset
+            end
+          end
         end # while
 
         @offset
@@ -338,7 +363,6 @@ module ZIMG
       def decode_baseline(component, dst)
         t = component.huffman_table_dc.decode(@bit_io)
         diff = t == 0 ? 0 : @bit_io.receive_extend(t)
-        # printf "[d] offset=%6d                       t=%d diff=%d\n", @offset, t, diff
         dst[0] = (component.pred += diff)
         k = 1
         while k < 64
@@ -356,7 +380,6 @@ module ZIMG
           dst[z] = @bit_io.receive_extend(s)
           k += 1
         end
-        # printf "[d] offset=%6d decode_baseline end\n", @offset
       end
 
       def decode_ac0(component, dst)

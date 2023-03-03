@@ -16,6 +16,7 @@ module ZIMG
       end
 
       def data
+        warn "FIXME: respect scaled components"
         image.components.map { |c| c.decoded_lines[@idx] }
       end
 

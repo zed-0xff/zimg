@@ -71,16 +71,6 @@ module ZIMG
         quantptr = 0
         wsptr = 0
 
-        #        @islow ||= 0
-        #        puts "[d] islow #@islow"
-        #        @islow += 1
-
-        #        printf("[d] in: ")
-        #        64.times do |i|
-        #            printf("%d ", data_in[i])
-        #        end
-        #        printf("\n")
-
         DCTSIZE.times do
           # Due to quantization, we will usually find that many of the input
           # coefficients are zero, especially the AC terms.  We can exploit this
@@ -278,8 +268,6 @@ module ZIMG
           data_out[outptr + 3] = range_limit(RIGHT_SHIFT(tmp13 + tmp0, CONST_BITS + PASS1_BITS + 3))
           data_out[outptr + 4] = range_limit(RIGHT_SHIFT(tmp13 - tmp0, CONST_BITS + PASS1_BITS + 3))
 
-          # STDOUT << data_out[outptr,8]
-
           wsptr += DCTSIZE # advance pointer to next row
         end
       end
@@ -289,13 +277,6 @@ module ZIMG
         inptr = 0
         quantptr = 0
         wsptr = 0
-
-        #        printf "[d] in:"
-        #        data_in.size.times do |i|
-        #          puts if i%8 == 0
-        #          printf "%4d ", data_in[i]
-        #        end
-        #        puts
 
         # Pass 1: process columns from input, store into work array.
 
@@ -493,12 +474,6 @@ module ZIMG
           data_out[outptr + 9]  = range_limit(RIGHT_SHIFT(tmp26 - tmp12, CONST_BITS + PASS1_BITS + 3))
           data_out[outptr + 7]  = range_limit(RIGHT_SHIFT(tmp27 + tmp13, CONST_BITS + PASS1_BITS + 3))
           data_out[outptr + 8]  = range_limit(RIGHT_SHIFT(tmp27 - tmp13, CONST_BITS + PASS1_BITS + 3))
-
-          #          printf "  "
-          #          16.times do |i|
-          #            printf "%02x ", data_out[outptr+i].ord
-          #          end
-          #          puts
 
           wsptr += 8    # advance pointer to next row
         end
