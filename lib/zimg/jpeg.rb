@@ -211,6 +211,7 @@ end
 require_relative "jpeg/chunks"
 require_relative "jpeg/colorspace"
 require_relative "jpeg/idct"
+require_relative "jpeg/upsample"
 require_relative "jpeg/decoder"
 require_relative "jpeg/huffman"
 require_relative "jpeg/lossless"

@@ -34,6 +34,7 @@ module ZIMG
       attr_accessor :huffman_table_ac, :huffman_table_dc, :pred, :scale_x, :scale_y
 
       include IDCT
+      include Upsample
 
       def initialize(id, hv, qid)
         @id = id
@@ -71,7 +72,14 @@ module ZIMG
       end
 
       def to_enum(width, height)
-        return h2v2_fancy_upsample(width, height) if @scale_x == 0.5 && @scale_y == 0.5 && @downsampled_width > 2
+        if @downsampled_width > 2
+          if @scale_x == 0.5
+            return h2v2_fancy_upsample(width, height) if @scale_y == 0.5
+            return h2v1_fancy_upsample(width, height) if @scale_y == 1
+          end
+        elsif @scale_x == 1 && @scale_y == 0.5
+          return h1v2_fancy_upsample(width, height)
+        end
 
         Enumerator.new do |e|
           y = 0
@@ -83,52 +91,6 @@ module ZIMG
               x += @scale_x
             end
             y += @scale_y
-          end
-        end
-      end
-
-      # from libjpeg-turbo
-      def h2v2_fancy_upsample(width, _height)
-        row = [0] * @downsampled_width * 2
-        Enumerator.new do |e|
-          @downsampled_height.times do |y|
-            2.times do |v|
-              o = -1
-              line0 = decoded_lines[y]
-              line1 =
-                if v == 0
-                  # next nearest is row above
-                  decoded_lines[y == 0 ? 0 : (y - 1)]
-                else
-                  # next nearest is row below
-                  # there's actually can be more decoded_lines than downsampled_width
-                  decoded_lines[y == @downsampled_height - 1 ? y : (y + 1)]
-                end
-
-              thiscolsum = line0.getbyte(0) * 3 + line1.getbyte(0)
-              nextcolsum = line0.getbyte(1) * 3 + line1.getbyte(1)
-              row[o += 1] = ((thiscolsum * 4 + 8) >> 4)
-              row[o += 1] = ((thiscolsum * 3 + nextcolsum + 7) >> 4)
-              lastcolsum = thiscolsum
-              thiscolsum = nextcolsum
-
-              2.upto(@downsampled_width - 1) do |x|
-                nextcolsum = line0.getbyte(x) * 3 + line1.getbyte(x)
-                row[o += 1] = ((thiscolsum * 3 + lastcolsum + 8) >> 4)
-                row[o += 1] = ((thiscolsum * 3 + nextcolsum + 7) >> 4)
-                lastcolsum = thiscolsum
-                thiscolsum = nextcolsum
-              end
-
-              # Special case for last column
-              row[o += 1] = ((thiscolsum * 3 + lastcolsum + 8) >> 4)
-              row[o += 1] = ((thiscolsum * 4 + 7) >> 4)
-
-              # maybe yield entire row?
-              width.times do |o|
-                e << row[o]
-              end
-            end
           end
         end
       end

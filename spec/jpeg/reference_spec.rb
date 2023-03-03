@@ -8,9 +8,9 @@ each_sample("**/*.jpg").sort_by(&:size).each do |src_fname|
 
   next if src_fname["/fuzz"]
   next if src_fname["/crash"]
-  next if src_fname["lossless"]
-  next if src_bname == "testorig12.jpg"     # convert: Unsupported JPEG data precision 12
-  next if src_bname == "red-bad-marker.jpg" # convert: Unsupported marker type 0xb6
+  next if src_fname["lossless"]             # convert: Unsupported JPEG process: SOF type 0xc3
+  next if src_bname == "testorig12.jpg"     # TODO: convert: Unsupported JPEG data precision 12
+  next if src_bname == "red-bad-marker.jpg" # TODO: convert: Unsupported marker type 0xb6
 
   md5 = Digest::MD5.file(src_fname).to_s
   next if processed[md5]
