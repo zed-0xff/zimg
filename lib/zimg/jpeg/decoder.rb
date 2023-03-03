@@ -71,7 +71,7 @@ module ZIMG
       end
 
       def to_enum(width, height)
-        return h2v2_fancy_upsample(width, height) if @scale_x == 0.5 && @scale_y == 0.5
+        return h2v2_fancy_upsample(width, height) if @scale_x == 0.5 && @scale_y == 0.5 && @downsampled_width > 2
 
         Enumerator.new do |e|
           y = 0
