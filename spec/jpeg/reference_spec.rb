@@ -18,7 +18,10 @@ each_sample("**/*.jpg").sort_by(&:size).each do |src_fname|
   processed[md5] = true
 
   dst_fname = src_fname.sub(/\.(\w+)$/, ".im.png")
-  system("convert", src_fname, dst_fname, exception: true) unless File.exist?(dst_fname)
+  unless File.exist?(dst_fname)
+    system("convert", "-define", "jpeg:block-smoothing=false", src_fname, dst_fname,
+      exception: true)
+  end
 
   dst_format = "png"
   RSpec.describe src_fname do

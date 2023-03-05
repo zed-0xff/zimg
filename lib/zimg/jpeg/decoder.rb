@@ -69,8 +69,6 @@ module ZIMG
 
         @scale_x = 1.0 * h / frame.max_h
         @scale_y = 1.0 * v / frame.max_v
-
-        # printf "[d] comp %d: blocks=%dx%d bpc=%d bpl=%d\n", @id, @blocks.size, @blocks[0].size, @blocks_per_column, @blocks_per_line
       end
 
       def to_enum(width, height)
@@ -138,11 +136,16 @@ module ZIMG
       def initialize(data, offset: 0)
         @data = data
         @offset = offset
+        @eof = false
       end
 
       def next
         @bio ||= _create_enumerator(@data, @offset)
         @bio.next
+      end
+
+      def eof?
+        @eof
       end
 
       def peek_byte(add = 0)
@@ -211,8 +214,12 @@ module ZIMG
             e << ((b >> 1) & 1)
             e << (b & 1)
           end
+          @eof = true
+          # stuff zeroes into the data stream, so that we can produce some kind of image.
+          loop do
+            e << 0
+          end
           # will raise StopIteration if try to read behind at this point
-          # e << nil # EOF
         end
       end
     end
@@ -244,9 +251,9 @@ module ZIMG
         decode_fn =
           if @progressive
             if @spectral_start == 0
-              @successive_prev == 0 ? :decode_dc0 : :decode_dc1
+              @successive_prev == 0 ? :decode_mcu_DC_first : :decode_mcu_DC_refine
             else
-              @successive_prev == 0 ? :decode_ac0 : :decode_ac1
+              @successive_prev == 0 ? :decode_mcu_AC_first : :decode_mcu_AC_refine
             end
           else
             :decode_baseline
@@ -261,8 +268,6 @@ module ZIMG
             @mcus_per_line * @mcus_per_column
           end
         @reset_interval ||= mcu_expected
-
-        # printf("[d] mcu=%d, mcu_expected=%d, reset_interval=%d, mpl=%d, mpc=%d\n", mcu, mcu_expected, @reset_interval, @mcus_per_line, @mcus_per_column);
 
         while mcu < mcu_expected
           @bit_io.reset!
@@ -280,10 +285,8 @@ module ZIMG
           else
             @reset_interval.times do
               @components.each do |c|
-                # printf("[d] decode_mcu %d c.id=%d c.v=%d c.h=%d\n", mcu, c.id, c.v, c.h)
                 c.v.times do |j|
                   c.h.times do |k|
-                    # printf("[d] decode_mcu %d cid=%d j=%d k=%d\n", mcu, c.id, j, k)
                     decode_mcu(c, decode_fn, mcu, j, k)
                   end
                 end
@@ -293,22 +296,6 @@ module ZIMG
               # If we've reached our expected MCU's, stop decoding
               break if mcu == mcu_expected
             end
-          end
-
-          if false # mcu == mcu_expected
-            # Skip trailing bytes at the end of the scan - until we reach the next marker
-            no_ff_skip = 0
-            while @bit_io.bytes_left > 0
-              if @bit_io.peek_byte == "\xFF"
-                break if @bit_io.peek_byte(1) != "\x00"
-              else
-                p @bit_io.peek_byte
-                no_ff_skip += 1
-              end
-
-              @bit_io.skip_bytes(1)
-            end
-            warn(format("[?] %d extra bytes at end of scan", no_ff_skip).yellow) if no_ff_skip > 0
           end
 
           loop do
@@ -325,8 +312,9 @@ module ZIMG
               # maybe a series of FF's followed by 0
               @bit_io.skip_bytes(1)
             when nil, ""
-              # valid EOF?
-              return @offset
+              # EOF?
+              # return @offset
+              break
             else
               warn "[?] expected RSTx, but got #{marker.inspect}"
               return @offset
@@ -335,12 +323,13 @@ module ZIMG
         end # while
 
         @offset
-      rescue StopIteration
-        # catch unexpected end of data (partial_progressive.jpg, non-interleaved_progressive-*.jpg)
-        warn "[?] unexpected EOF"
       end
 
       def decode_mcu(component, decode_fn, mcu, row, col)
+        # If we've run out of data, just leave the MCU set to zeroes.
+        # This way, we return uniform gray for the remainder of the segment.
+        return if @bit_io.eof?
+
         mcu_row = mcu / @mcus_per_line
         mcu_col = mcu % @mcus_per_line
         block_row = mcu_row * component.v + row
@@ -349,15 +338,24 @@ module ZIMG
         return unless component.blocks[block_row]
 
         decode_fn.call(component, component.blocks[block_row][block_col])
+      rescue StopIteration
+        # catch unexpected end of data (partial_progressive.jpg, non-interleaved_progressive-*.jpg)
+        warn "[?] unexpected EOF"
       end
 
       def decode_block(component, decode_fn, mcu)
         block_row = mcu / component.blocks_per_line
         block_col = mcu % component.blocks_per_line
-        # skip missing block
-        return unless component.blocks[block_row]
 
-        decode_fn.call(component, component.blocks[block_row][block_col])
+        if @bit_io.eof?
+          # If we've run out of data, just leave the MCU set to zeroes.
+          # This way, we return uniform gray for the remainder of the segment.
+        else
+          decode_fn.call(component, component.blocks[block_row][block_col])
+        end
+      rescue StopIteration
+        # catch unexpected end of data (partial_progressive.jpg, non-interleaved_progressive-*.jpg)
+        warn "[?] unexpected EOF"
       end
 
       def decode_baseline(component, dst)
@@ -382,7 +380,7 @@ module ZIMG
         end
       end
 
-      def decode_ac0(component, dst)
+      def decode_mcu_AC_first(component, dst)
         if @eobrun > 0
           @eobrun -= 1
           return
@@ -409,7 +407,7 @@ module ZIMG
         end
       end
 
-      def decode_ac1(component, dst)
+      def decode_mcu_AC_refine(component, dst)
         k = @spectral_start
         e = @spectral_end
         r = 0
@@ -465,13 +463,13 @@ module ZIMG
         @successive_ac_state = 0 if @eobrun == 0
       end
 
-      def decode_dc0(component, dst)
+      def decode_mcu_DC_first(component, dst)
         t = component.huffman_table_dc.decode(@bit_io)
         diff = t == 0 ? 0 : (@bit_io.receive_extend(t) << @successive)
         dst[0] = (component.pred += diff)
       end
 
-      def decode_dc1(_component, dst)
+      def decode_mcu_DC_refine(_component, dst)
         dst[0] |= (@bit_io.next << @successive)
       end
     end # class Decoder
