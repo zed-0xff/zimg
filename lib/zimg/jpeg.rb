@@ -154,6 +154,10 @@ module ZIMG
       dst
     end
 
+    def export
+      MAGIC + @chunks.map(&:export).join
+    end
+
     def components
       @components ||= _decode_components
     end
