@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 module ZIMG
-  class Chunk # rubocop:disable Lint/EmptyClass
-    # TBD
+  class Chunk
+    def cli_color
+      :magenta
+    end
   end
 end

@@ -4,7 +4,7 @@ require "zlib"
 
 module ZIMG
   module PNG
-    class Chunk
+    class Chunk < ZIMG::Chunk
       attr_accessor :size, :type, :data, :crc, :idx, :offset
 
       KNOWN_TYPES = %w[IHDR PLTE IDAT IEND cHRM gAMA iCCP sBIT sRGB bKGD hIST tRNS pHYs sPLT tIME iTXt tEXt zTXt].freeze
@@ -271,6 +271,23 @@ module ZIMG
           index(color) || add(color)
         end
         alias << find_or_add
+      end
+
+      class ICCP < Chunk
+        attr_reader :name, :compression, :profile
+
+        def initialize(x)
+          super
+          @name, @compression, cdata = @data.unpack("Z*Ca*")
+          # current only @compression value is 0 - deflate
+          @profile = Zlib::Inflate.inflate(cdata)
+        end
+
+        def inspect(_verbosity = 10)
+          info = format(", name=%s, compression=%s, profile=[%d bytes]", name.inspect, compression.inspect,
+            profile.size)
+          "#{super.chop.rstrip}#{info} >"
+        end
       end
 
       class CHRM < Chunk

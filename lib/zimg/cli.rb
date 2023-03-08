@@ -194,7 +194,8 @@ module ZIMG
       @img.chunks.each do |chunk|
         next if idx && chunk.idx != idx
 
-        colored_type = chunk.type.ljust(max_type_len).magenta
+        color = chunk.cli_color || :to_s
+        colored_type = chunk.type.ljust(max_type_len).send(color)
         colored_crc =
           if chunk.crc == :no_crc # HACK: for BMP chunks (they have no CRC)
             ""
