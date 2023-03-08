@@ -35,8 +35,34 @@ module ZIMG
 
     def read_jpeg(io)
       until io.eof?
-        marker = io.read(2)
-        break if marker == EOI
+        garbage = String.new
+        marker = nil
+
+        # read all until first FF
+        loop do
+          case (marker = io.read(1))
+          when "\xff" then break
+          when nil then return # EOF
+          else
+            garbage << marker
+          end
+        end
+
+        # skip all consecutive FF's
+        loop do
+          case (marker = io.read(1))
+          when "\xff"
+            garbage << marker
+          when nil then return # EOF
+          else
+            break
+          end
+        end
+
+        @chunks << Garbage.new(garbage) unless garbage.empty?
+
+        # canonicalize marker
+        marker = "\xff#{marker}"
 
         case marker[1].ord
         when 0xc4 # overlaps with SOF range!
@@ -51,6 +77,8 @@ module ZIMG
             @height = chunk.height
             @bpp = chunk.bpp
           end
+        when 0xd9 # EOI
+          break
         when 0xda
           @chunks << (sos = SOS.new(marker, io))
           # Entropy-Coded Segment starts

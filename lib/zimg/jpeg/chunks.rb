@@ -4,7 +4,7 @@
 
 module ZIMG
   module JPEG
-    class Chunk
+    class Chunk < ZIMG::Chunk
       attr_accessor :marker, :size, :data
 
       def initialize(marker, io)
@@ -58,6 +58,18 @@ module ZIMG
         end
       end
 
+      class ICC_PROFILE < IOStruct.new("cc", :seq_no, :num_markers, :data)
+        def self.read(data)
+          r = super
+          r.data = data[2..]
+          r
+        end
+
+        def inspect *_args
+          format("<seq_no=%d, num_markers=%d, data=[%d bytes]", seq_no, num_markers, data.size)
+        end
+      end
+
       def initialize(marker, io)
         super
         @id = marker[1].ord & 0xf
@@ -69,6 +81,9 @@ module ZIMG
         when "Adobe"
           # APP14
           @tag = Adobe.read(@data[(@name.size + 1)..])
+        when "ICC_PROFILE"
+          # APP2
+          @tag = ICC_PROFILE.read(@data[(@name.size + 1)..])
         end
 
         # TODO: read thumbnail, see https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format
@@ -298,6 +313,25 @@ module ZIMG
 
       def export *_args
         @data
+      end
+    end
+
+    class Garbage < Chunk
+      def initialize(data) # rubocop:disable Lint/MissingSuper
+        @data = data
+        @size = data.size
+      end
+
+      def export *_args
+        @data
+      end
+
+      def cli_color
+        nil
+      end
+
+      def inspect *_args
+        super.red
       end
     end
   end

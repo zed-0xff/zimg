@@ -204,7 +204,7 @@ module ZIMG
 
               @offset += 1
             end
-            # printf "[d] offset=%6d byte=%3d\n", @offset-1, b
+            # printf("[d] byte: %02x, offset: %6d\n", b, @offset-1)
             e << (b >> 7)
             e << ((b >> 6) & 1)
             e << ((b >> 5) & 1)
@@ -226,21 +226,17 @@ module ZIMG
 
     class Decoder
       # rubocop:disable Metrics/ParameterLists
-      def initialize(data, frame, components, reset_interval, spectral_start, spectral_end, successive_prev, successive)
+      def initialize(data, frame, components, reset_interval, spectral_start, spectral_end, ah, al)
         @components       = components
         @reset_interval   = reset_interval
         @spectral_end     = spectral_end
         @spectral_start   = spectral_start
-        @successive       = successive
-        @successive_prev  = successive_prev
+        @al = al
+        @ah = ah
 
         @mcus_per_line    = frame.mcus_per_line
         @mcus_per_column  = frame.mcus_per_column
         @progressive      = frame.progressive
-
-        @successive_ac_state = 0
-        @successive_ac_next_value = nil
-        @eobrun = 0
 
         @offset = 0
         @bit_io = BitEnumerator.new(data)
@@ -248,12 +244,14 @@ module ZIMG
       # rubocop:enable Metrics/ParameterLists
 
       def decode_scan
+        @successive_ac_state = 0
+
         decode_fn =
           if @progressive
             if @spectral_start == 0
-              @successive_prev == 0 ? :decode_mcu_DC_first : :decode_mcu_DC_refine
+              @ah == 0 ? :decode_mcu_DC_first : :decode_mcu_DC_refine
             else
-              @successive_prev == 0 ? :decode_mcu_AC_first : :decode_mcu_AC_refine
+              @ah == 0 ? :decode_mcu_AC_first : :decode_mcu_AC_refine
             end
           else
             :decode_baseline
@@ -334,8 +332,6 @@ module ZIMG
         mcu_col = mcu % @mcus_per_line
         block_row = mcu_row * component.v + row
         block_col = mcu_col * component.h + col
-        # skip missing block
-        return unless component.blocks[block_row]
 
         decode_fn.call(component, component.blocks[block_row][block_col])
       rescue StopIteration
@@ -397,20 +393,24 @@ module ZIMG
               @eobrun = @bit_io.receive(r) + (1 << r) - 1
               break
             end
+            # r == 15
             k += 16
             next
           end
+          # s > 0
           k += r
           z = DCT_ZIGZAG[k]
-          dst[z] = @bit_io.receive_extend(s) * (1 << @successive)
+          dst[z] = @bit_io.receive_extend(s) * (1 << @al)
           k += 1
         end
       end
 
       def decode_mcu_AC_refine(component, dst)
+        next_value = nil
         k = @spectral_start
         e = @spectral_end
         r = 0
+        z = 0
         while k <= e
           z = DCT_ZIGZAG[k]
           direction = dst[z] < 0 ? -1 : 1
@@ -419,7 +419,8 @@ module ZIMG
             rs = component.huffman_table_ac.decode(@bit_io)
             s = rs & 15
             r = rs >> 4
-            if s == 0
+            case s
+            when 0
               if r < 15
                 @eobrun = @bit_io.receive(r) + (1 << r)
                 @successive_ac_state = 4
@@ -427,16 +428,16 @@ module ZIMG
                 r = 16
                 @successive_ac_state = 1
               end
-            else
-              raise "invalid ACn encoding" if s != 1
-
-              @successive_ac_next_value = @bit_io.receive_extend(s)
+            when 1
+              next_value = @bit_io.receive_extend(1)
               @successive_ac_state = r == 0 ? 3 : 2
+            else
+              raise "invalid ACn encoding" # libjpeg-turbo: "Corrupt JPEG data: bad Huffman code"
             end
             next
           when 1, 2 # skipping r zero items
             if dst[z] != 0
-              dst[z] += (@bit_io.next << @successive) * direction
+              dst[z] += (@bit_io.next << @al) * direction
             else
               r -= 1
               if r == 0
@@ -445,18 +446,26 @@ module ZIMG
             end
           when 3 # set value for a zero item
             if dst[z] != 0
-              dst[z] += (@bit_io.next << @successive) * direction
+              dst[z] += (@bit_io.next << @al) * direction
             else
-              dst[z] = @successive_ac_next_value << @successive
+              dst[z] = next_value << @al
               @successive_ac_state = 0
             end
           when 4 # eob
-            dst[z] += (@bit_io.next << @successive) * direction if dst[z] != 0
+            dst[z] += (@bit_io.next << @al) * direction if dst[z] != 0
           else
             raise "invalid AC state #{@successive_ac_state}"
           end # case
           k += 1
         end # while
+
+        # corresponds to "Output newly nonzero coefficient" line of jdphuff.c
+        # (samples/jpeg/jpeg-decoder/tests/reftest/images/partial_progressive.jpg)
+        if @successive_ac_state == 3 && next_value && z < 64
+          dst[z] = next_value << @al
+          next_value = nil
+        end
+
         return unless @successive_ac_state == 4
 
         @eobrun -= 1
@@ -465,12 +474,12 @@ module ZIMG
 
       def decode_mcu_DC_first(component, dst)
         t = component.huffman_table_dc.decode(@bit_io)
-        diff = t == 0 ? 0 : (@bit_io.receive_extend(t) << @successive)
+        diff = t == 0 ? 0 : (@bit_io.receive_extend(t) << @al)
         dst[0] = (component.pred += diff)
       end
 
       def decode_mcu_DC_refine(_component, dst)
-        dst[0] |= (@bit_io.next << @successive)
+        dst[0] |= (@bit_io.next << @al)
       end
     end # class Decoder
   end

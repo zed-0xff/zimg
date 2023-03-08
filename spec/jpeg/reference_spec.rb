@@ -3,7 +3,7 @@
 require "digest/md5"
 
 processed = {}
-each_sample("**/*.jpg").sort_by(&:size).each do |src_fname|
+each_sample("**/*.{jpg,jpeg}").sort_by(&:size).each do |src_fname|
   src_bname = File.basename(src_fname)
 
   next if src_fname["/fuzz"]
